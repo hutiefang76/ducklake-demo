@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: ducklake-demo
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_catalog: ${DUCKLAKE_ATTACH_NAME:my_lake}
+        default_schema: ${DUCKLAKE_DEMO_SCHEMA:main}
+        jdbc:
+          time_zone: UTC
+        format_sql: true
+  sql:
+    init:
+      mode: never
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+    jdbc-type-for-null: 'NULL'
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    try-it-out-enabled: true
+    display-request-duration: true
+    operations-sorter: method
+    tags-sorter: alpha
+    doc-expansion: list
+
+ducklake:
+  pg-host: ${PG_HOST:}
+  pg-port: ${PG_PORT:15432}
+  pg-database: ${PG_DB:}
+  pg-user: ${PG_USER:}
+  pg-password: ${PG_PASSWORD:}
+  pg-client-encoding: ${DUCKLAKE_PG_CLIENT_ENCODING:UTF8}
+  s3-endpoint: ${S3_ENDPOINT:}
+  s3-region: ${S3_REGION:us-east-1}
+  s3-url-style: ${S3_URL_STYLE:path}
+  s3-use-ssl: ${S3_USE_SSL:false}
+  s3-access-key: ${S3_ACCESS_KEY:}
+  s3-secret-key: ${S3_SECRET_KEY:}
+  data-path: ${DUCKLAKE_DATA_PATH:}
+  attach-name: ${DUCKLAKE_ATTACH_NAME:my_lake}
+  schema-name: ${DUCKLAKE_DEMO_SCHEMA:main}
+  duckdb-path: ${DUCKDB_PATH:}
+  extension-directory: ${DUCKDB_EXTENSION_DIRECTORY:}
+  install-extensions: ${DUCKLAKE_INSTALL_EXTENSIONS:true}
+  maximum-pool-size: ${DUCKLAKE_POOL_SIZE:1}
+
+logging:
+  file:
+    # 除控制台外同时保存本机日志，便于演示后追溯做了什么；*.log 已被 Git 忽略。
+    name: ${LOG_FILE:logs/ducklake-demo.log}
+  level:
+    root: INFO
+    org.hibernate.SQL: INFO
+    com.lanxinai.data.paltform.ducklake: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
