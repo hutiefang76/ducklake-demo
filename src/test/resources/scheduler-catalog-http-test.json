@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "data-platform/data-platform-notebooks",
+  "gitRef": "refs/heads/codex/etl-contract-v2",
+  "execution": {
+    "tenantCode": "etl-tenant",
+    "workerGroup": "etl-workers",
+    "failureStrategy": "CONTINUE",
+    "warningType": "NONE",
+    "warningGroupId": 0,
+    "runMode": "RUN_MODE_SERIAL",
+    "workflowInstancePriority": "HIGH",
+    "environmentCode": -1
+  },
+  "projects": [
+    {
+      "id": "notebooks-etl",
+      "name": "Notebooks ETL",
+      "code": 42,
+      "workflows": [
+        {
+          "id": "material.master_refresh",
+          "name": "Material Master Refresh",
+          "code": 77,
+          "runManifestParameter": "run_manifest_uri",
+          "runManifestSha256Parameter": "run_manifest_sha256",
+          "parameterSchemaVersion": 2,
+          "parameterSchemaSha256": "a42c3cf149691935bb6b4788beb046c7d3fbf436247e1cf37fe40f3fa7df0d4f",
+          "parameterSchema": {
+            "check_scope": {
+              "type": "enum",
+              "description": "检查范围：全部物料或指定物料编码前缀。",
+              "required": false,
+              "default": "all",
+              "values": ["all", "prefix"]
+            }
+          },
+          "nodes": [
+            {
+              "id": "dq-check",
+              "name": "DQ Check",
+              "taskId": "mdm_etl.dq_check_mdm_material",
+              "code": 1001,
+              "taskType": "SHELL"
+            }
+          ]
+        }
+      ],
+      "taskGroups": []
+    }
+  ]
+}
