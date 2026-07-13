@@ -1,6 +1,7 @@
 package com.lanxinai.data.paltform.ducklake.controller;
 
 import com.lanxinai.data.paltform.ducklake.scheduler.client.SchedulerClientException;
+import com.lanxinai.data.paltform.ducklake.scheduler.SchedulerAuthorizationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,17 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of(
                 "status", 400,
                 "error", exception.getMessage(),
+                "timestamp", Instant.now().toString()
+        ));
+    }
+
+    @ExceptionHandler(SchedulerAuthorizationException.class)
+    public ResponseEntity<Map<String, Object>> schedulerForbidden(
+            SchedulerAuthorizationException exception) {
+        log.warn("Scheduler facade 拒绝未登记资源：{}", exception.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                "status", 403,
+                "error", "Scheduler resource is not authorized",
                 "timestamp", Instant.now().toString()
         ));
     }

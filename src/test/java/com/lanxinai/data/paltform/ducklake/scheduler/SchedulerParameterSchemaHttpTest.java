@@ -7,6 +7,7 @@ import com.lanxinai.data.paltform.ducklake.scheduler.client.DolphinSchedulerClie
 import com.lanxinai.data.paltform.ducklake.scheduler.config.SchedulerConfig;
 import com.lanxinai.data.paltform.ducklake.scheduler.config.SchedulerProperties;
 import com.lanxinai.data.paltform.ducklake.scheduler.controller.SchedulerController;
+import com.lanxinai.data.paltform.ducklake.controller.ApiExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -86,6 +87,20 @@ class SchedulerParameterSchemaHttpTest {
                 .containsPattern("[\\u4E00-\\u9FFF]");
     }
 
+    @Test
+    void rejectsUnownedWorkflowInstanceOverRealHttp() throws Exception {
+        URI uri = URI.create("http://127.0.0.1:" + port
+                + "/api/scheduler/projects/notebooks-etl/runs/999/status");
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(uri).GET().build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        JsonNode body = new ObjectMapper().readTree(response.body());
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(body.path("error").asText())
+                .isEqualTo("Scheduler resource is not authorized");
+    }
+
     private static Path catalogPath() {
         return Path.of(System.getProperty(
                 "etl.catalog.path",
@@ -105,13 +120,37 @@ class SchedulerParameterSchemaHttpTest {
             SchedulerCatalogService.class,
             DolphinSchedulerClient.class,
             SchedulerFacadeService.class,
-            SchedulerController.class
+            SchedulerController.class,
+            ApiExceptionHandler.class
     })
     static class TestApplication {
 
         @Bean
         ObjectMapper objectMapper() {
             return new ObjectMapper();
+        }
+
+        @Bean
+        SchedulerRunRegistry schedulerRunRegistry() {
+            return new SchedulerRunRegistry() {
+                @Override
+                public String requireAuthorizedManifest(
+                        String projectId,
+                        String workflowId,
+                        com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunManifestRef manifest) {
+                    throw new SchedulerAuthorizationException("Not available in metadata-only test");
+                }
+
+                @Override
+                public void attachWorkflowInstance(String runId, long workflowInstanceId) {
+                    throw new SchedulerAuthorizationException("Not available in metadata-only test");
+                }
+
+                @Override
+                public void requireOwnedInstance(String projectId, long workflowInstanceId) {
+                    throw new SchedulerAuthorizationException("Not available in metadata-only test");
+                }
+            };
         }
     }
 }

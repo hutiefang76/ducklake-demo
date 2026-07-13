@@ -82,13 +82,61 @@ public class EtlLedgerRepository {
 
     public void attachWorkflowInstance(String runId, long workflowInstanceId) {
         initialize();
-        String sql = "UPDATE " + schema() + ".etl_run SET workflow_instance_id=?, state='SUBMITTED', submitted_at=current_timestamp WHERE run_id=?";
+        String sql = "UPDATE " + schema() + ".etl_run "
+                + "SET workflow_instance_id=?, state='SUBMITTED', submitted_at=COALESCE(submitted_at, current_timestamp) "
+                + "WHERE run_id=? AND (workflow_instance_id IS NULL OR workflow_instance_id=?)";
         try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, workflowInstanceId);
             statement.setString(2, runId);
+            statement.setLong(3, workflowInstanceId);
             if (statement.executeUpdate() != 1) throw new IllegalStateException("ETL run ledger row is missing");
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to update ETL run ledger", exception);
+        }
+    }
+
+    public Optional<RunRecord> findRunForManifest(
+            String runId,
+            String projectId,
+            String workflowId,
+            String manifestUri,
+            String manifestSha256) {
+        initialize();
+        String sql = "SELECT run_id, project_id, workflow_id, workflow_instance_id, manifest_uri, manifest_sha256, requested_by, state "
+                + "FROM " + schema() + ".etl_run WHERE project_id=? AND workflow_id=? "
+                + "AND manifest_uri=? AND manifest_sha256=?"
+                + (runId == null || runId.isBlank() ? "" : " AND run_id=?");
+        try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, projectId);
+            statement.setString(2, workflowId);
+            statement.setString(3, manifestUri);
+            statement.setString(4, manifestSha256);
+            if (runId != null && !runId.isBlank()) statement.setString(5, runId);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) return Optional.empty();
+                RunRecord record = runRecord(result);
+                if (result.next()) {
+                    throw new IllegalStateException("Multiple ETL runs match the same manifest");
+                }
+                return Optional.of(record);
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to authorize ETL run manifest", exception);
+        }
+    }
+
+    public Optional<RunRecord> findRunByWorkflowInstance(String projectId, long workflowInstanceId) {
+        initialize();
+        String sql = "SELECT run_id, project_id, workflow_id, workflow_instance_id, manifest_uri, manifest_sha256, requested_by, state "
+                + "FROM " + schema() + ".etl_run WHERE project_id=? AND workflow_instance_id=?";
+        try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, projectId);
+            statement.setLong(2, workflowInstanceId);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next() ? Optional.of(runRecord(result)) : Optional.empty();
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to authorize workflow instance", exception);
         }
     }
 
@@ -137,6 +185,17 @@ public class EtlLedgerRepository {
 
     private String schema() { return properties.getLedger().getSchema(); }
 
+    private static RunRecord runRecord(ResultSet result) throws SQLException {
+        long instanceId = result.getLong(4);
+        return new RunRecord(
+                result.getString(1), result.getString(2), result.getString(3),
+                result.wasNull() ? null : instanceId,
+                result.getString(5), result.getString(6), result.getString(7), result.getString(8));
+    }
+
     public record ArtifactRecord(String artifactId, String uri, String originalName, String contentType,
                                  long size, String sha256, String requestedBy, Instant createdAt) {}
+
+    public record RunRecord(String runId, String projectId, String workflowId, Long workflowInstanceId,
+                            String manifestUri, String manifestSha256, String requestedBy, String state) {}
 }

@@ -28,6 +28,10 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class SchedulerFacadeServiceTest {
 
@@ -38,6 +42,7 @@ class SchedulerFacadeServiceTest {
     private MockWebServer server;
     private SchedulerFacadeService facade;
     private SchedulerCatalogService catalogService;
+    private SchedulerRunRegistry runRegistry;
     private Path catalogPath;
 
     @BeforeEach
@@ -119,7 +124,13 @@ class SchedulerFacadeServiceTest {
         catalogService = new SchedulerCatalogService(properties, mapper);
         DolphinSchedulerClient client = new DolphinSchedulerClient(
                 properties, mapper, HttpClient.newHttpClient());
-        facade = new SchedulerFacadeService(properties, catalogService, client);
+        runRegistry = mock(SchedulerRunRegistry.class);
+        when(runRegistry.requireAuthorizedManifest(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any(RunManifestRef.class)))
+                .thenReturn("run-test");
+        facade = new SchedulerFacadeService(properties, catalogService, client, runRegistry);
     }
 
     @Test
@@ -194,6 +205,7 @@ class SchedulerFacadeServiceTest {
                 new RunRequest("node-beta", "s3://etl-runs/manifests/run-1.json", "abc123"));
 
         assertThat(response.workflowInstanceId()).isEqualTo(9001L);
+        verify(runRegistry).attachWorkflowInstance("run-test", 9001L);
         assertThat(response.taskId()).isEqualTo("ods_etl.beta");
         RecordedRequest request = server.takeRequest();
         assertThat(request.getPath()).isEqualTo(
@@ -224,6 +236,7 @@ class SchedulerFacadeServiceTest {
                 new RunManifestRef("run-10", "s3://etl-runs/manifests/run-10.json", "sha10"));
 
         assertThat(response.workflowInstanceId()).isEqualTo(9010L);
+        verify(runRegistry).attachWorkflowInstance("run-test", 9010L);
         assertThat(response.nodeId()).isNull();
         Map<String, String> form = decodeForm(server.takeRequest().getBody().readUtf8());
         assertThat(form).doesNotContainKey("startNodeList");
@@ -238,6 +251,31 @@ class SchedulerFacadeServiceTest {
                 new RunRequest("node-beta", "s3://etl-runs/manifests/run-2.json", "abc456")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown managed workflow");
+        assertThat(server.getRequestCount()).isZero();
+    }
+
+    @Test
+    void rejectsUnregisteredManifestBeforeCallingDolphinScheduler() {
+        when(runRegistry.requireAuthorizedManifest(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any(RunManifestRef.class)))
+                .thenThrow(new SchedulerAuthorizationException("not registered"));
+
+        assertThatThrownBy(() -> facade.startWorkflow(
+                "project-a", "workflow-b",
+                new RunManifestRef("unknown", "s3://etl-runs/unknown.json", "bad")))
+                .isInstanceOf(SchedulerAuthorizationException.class);
+        assertThat(server.getRequestCount()).isZero();
+    }
+
+    @Test
+    void rejectsUnownedInstanceBeforeCallingDolphinScheduler() {
+        doThrow(new SchedulerAuthorizationException("not registered"))
+                .when(runRegistry).requireOwnedInstance("project-a", 9001L);
+
+        assertThatThrownBy(() -> facade.status("project-a", 9001L))
+                .isInstanceOf(SchedulerAuthorizationException.class);
         assertThat(server.getRequestCount()).isZero();
     }
 

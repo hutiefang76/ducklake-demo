@@ -28,14 +28,17 @@ public class SchedulerFacadeService {
     private final SchedulerProperties properties;
     private final SchedulerCatalogService catalogService;
     private final DolphinSchedulerClient client;
+    private final SchedulerRunRegistry runRegistry;
 
     public SchedulerFacadeService(
             SchedulerProperties properties,
             SchedulerCatalogService catalogService,
-            DolphinSchedulerClient client) {
+            DolphinSchedulerClient client,
+            SchedulerRunRegistry runRegistry) {
         this.properties = properties;
         this.catalogService = catalogService;
         this.client = client;
+        this.runRegistry = runRegistry;
     }
 
     public SchedulerMetaResponse meta() {
@@ -78,22 +81,32 @@ public class SchedulerFacadeService {
             throw new IllegalArgumentException("nodeId is required");
         }
         ResolvedRun resolved = catalogService.resolveRun(projectId, workflowId, request.nodeId());
-        return client.startRun(
+        RunManifestRef manifest = new RunManifestRef(
+                null, request.runManifestUri(), request.runManifestSha256());
+        String runId = runRegistry.requireAuthorizedManifest(projectId, workflowId, manifest);
+        RunResponse response = client.startRun(
                 resolved.execution(), resolved.project(), resolved.workflow(), resolved.node(),
-                new RunManifestRef(null, request.runManifestUri(), request.runManifestSha256()));
+                manifest);
+        runRegistry.attachWorkflowInstance(runId, response.workflowInstanceId());
+        return response;
     }
 
     public RunResponse startWorkflow(String projectId, String workflowId, RunManifestRef manifest) {
         ResolvedWorkflow resolved = catalogService.resolveWorkflow(projectId, workflowId);
-        return client.startWorkflow(
+        String runId = runRegistry.requireAuthorizedManifest(projectId, workflowId, manifest);
+        RunResponse response = client.startWorkflow(
                 resolved.execution(), resolved.project(), resolved.workflow(), manifest);
+        runRegistry.attachWorkflowInstance(runId, response.workflowInstanceId());
+        return response;
     }
 
     public RunStatusResponse status(String projectId, long instanceId) {
+        runRegistry.requireOwnedInstance(projectId, instanceId);
         return client.runStatus(catalogService.project(projectId), instanceId);
     }
 
     public RunTasksResponse tasks(String projectId, long instanceId) {
+        runRegistry.requireOwnedInstance(projectId, instanceId);
         return client.runTasks(catalogService.project(projectId), instanceId);
     }
 
@@ -103,11 +116,13 @@ public class SchedulerFacadeService {
             Long taskInstanceId,
             int skipLineNum,
             int limit) {
+        runRegistry.requireOwnedInstance(projectId, instanceId);
         return client.runLog(
                 catalogService.project(projectId), instanceId, taskInstanceId, skipLineNum, limit);
     }
 
     public OperationResponse stop(String projectId, long instanceId) {
+        runRegistry.requireOwnedInstance(projectId, instanceId);
         return client.stopRun(catalogService.project(projectId), instanceId);
     }
 
