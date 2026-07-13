@@ -8,7 +8,29 @@ public record SchedulerCatalog(
         String generatedFrom,
         String gitRef,
         ExecutionDefaults execution,
+        List<TaskContract> tasks,
+        LineageCatalog lineage,
         List<ManagedProject> projects) {
+
+    public record TaskContract(
+            String id,
+            String title,
+            String description,
+            String path,
+            String entrypoint,
+            List<String> parameter_profiles,
+            Map<String, Map<String, Object>> parameters,
+            Map<String, Object> data_contract,
+            Map<String, Object> execution) {
+    }
+
+    public record LineageCatalog(
+            int schemaVersion,
+            List<Map<String, Object>> datasets,
+            List<Map<String, Object>> taskEdges,
+            List<Map<String, Object>> transformations,
+            List<Map<String, Object>> workflowEdges) {
+    }
 
     public record ExecutionDefaults(
             String tenantCode,
@@ -46,7 +68,12 @@ public record SchedulerCatalog(
             String name,
             String taskId,
             long code,
-            String taskType) {
+            String taskType,
+            List<String> dependsOn,
+            String title,
+            String description,
+            Map<String, Map<String, Object>> parameters,
+            Map<String, Object> dataContract) {
     }
 
     public record ManagedTaskGroup(

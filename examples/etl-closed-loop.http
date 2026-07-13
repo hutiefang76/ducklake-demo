@@ -1,0 +1,53 @@
+@baseUrl = http://127.0.0.1:8080
+@projectId = notebooks-etl
+@workflowId = material.master_refresh
+@taskId = ods_etl.upsert_ods_material_from_delta
+@instanceId = 82
+
+### 任务完整自描述契约
+GET {{baseUrl}}/api/scheduler/tasks/{{taskId}}/contract
+
+### 单任务声明血缘
+GET {{baseUrl}}/api/scheduler/tasks/{{taskId}}/lineage
+
+### 全局声明血缘
+GET {{baseUrl}}/api/scheduler/lineage
+
+### 上传文件（把路径改为本机真实文件）
+POST {{baseUrl}}/api/v1/etl/artifacts
+X-Requested-By: hutie
+Content-Type: multipart/form-data; boundary=ETLBoundary
+
+--ETLBoundary
+Content-Disposition: form-data; name="file"; filename="material.parquet"
+Content-Type: application/x-parquet
+
+< C:/data/material.parquet
+--ETLBoundary--
+
+### 使用受控 artifactId 启动物料主数据刷新
+POST {{baseUrl}}/api/v1/material-master/refresh
+X-Requested-By: hutie
+Content-Type: application/json
+
+{
+  "artifactId": "art_replace_me",
+  "planId": "plan-2026-07",
+  "versionId": "v1",
+  "reason": "REST Client closed-loop acceptance"
+}
+
+### 查询状态
+GET {{baseUrl}}/api/scheduler/projects/{{projectId}}/runs/{{instanceId}}/status
+
+### 查询 Node 实例
+GET {{baseUrl}}/api/scheduler/projects/{{projectId}}/runs/{{instanceId}}/tasks
+
+### 查询第一个 Node 日志
+GET {{baseUrl}}/api/scheduler/projects/{{projectId}}/runs/{{instanceId}}/log?skipLineNum=0&limit=20000
+
+### 显式停止
+POST {{baseUrl}}/api/scheduler/projects/{{projectId}}/runs/{{instanceId}}/stop
+
+### TaskGroup 队列快照
+GET {{baseUrl}}/api/scheduler/projects/{{projectId}}/task-groups/ducklake-writers/queue?pageNo=1&pageSize=20

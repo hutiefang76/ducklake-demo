@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedFrom": "data-platform/data-platform-notebooks",
   "gitRef": "refs/heads/codex/etl-contract-v2",
   "execution": {
@@ -11,6 +11,32 @@
     "runMode": "RUN_MODE_SERIAL",
     "workflowInstancePriority": "HIGH",
     "environmentCode": -1
+  },
+  "tasks": [
+    {
+      "id": "mdm_etl.dq_check_mdm_material",
+      "title": "检查 MDM 物料质量",
+      "description": "按固定规则检查 MDM 物料。",
+      "path": "mdm_etl/dq_check_mdm_material.py",
+      "entrypoint": "run_etl",
+      "parameter_profiles": [],
+      "parameters": {},
+      "data_contract": {
+        "inputs": [{"asset": "ducklake://my_lake/scps_mdm/mdm_material", "role": "source"}],
+        "outputs": [{"asset": "ducklake://my_lake/scps_mdm/mdm_check_result", "write_mode": "check_result"}],
+        "external_inputs": [],
+        "intermediates": [],
+        "transformations": [{"id": "validate_material", "type": "validate", "inputs": ["ducklake://my_lake/scps_mdm/mdm_material"], "outputs": ["ducklake://my_lake/scps_mdm/mdm_check_result"], "description": "检查物料质量"}]
+      },
+      "execution": {"class": "WRITE"}
+    }
+  ],
+  "lineage": {
+    "schemaVersion": 1,
+    "datasets": [{"uri": "ducklake://my_lake/scps_mdm/mdm_material", "roles": ["input"]}],
+    "taskEdges": [{"taskId": "mdm_etl.dq_check_mdm_material", "dataset": "ducklake://my_lake/scps_mdm/mdm_material", "direction": "READ", "role": "input"}],
+    "transformations": [{"taskId": "mdm_etl.dq_check_mdm_material", "id": "validate_material", "type": "validate", "inputs": ["ducklake://my_lake/scps_mdm/mdm_material"], "outputs": ["ducklake://my_lake/scps_mdm/mdm_check_result"], "description": "检查物料质量"}],
+    "workflowEdges": []
   },
   "projects": [
     {
@@ -41,7 +67,12 @@
               "name": "DQ Check",
               "taskId": "mdm_etl.dq_check_mdm_material",
               "code": 1001,
-              "taskType": "SHELL"
+              "taskType": "SHELL",
+              "dependsOn": [],
+              "title": "检查 MDM 物料质量",
+              "description": "按固定规则检查 MDM 物料。",
+              "parameters": {},
+              "dataContract": {"inputs": [], "outputs": [], "external_inputs": [], "intermediates": [], "transformations": []}
             }
           ]
         }

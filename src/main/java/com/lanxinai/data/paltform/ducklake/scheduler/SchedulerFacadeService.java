@@ -1,6 +1,8 @@
 package com.lanxinai.data.paltform.ducklake.scheduler;
 
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog;
+import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.LineageCatalog;
+import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.TaskContract;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogService;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogService.ResolvedRun;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogService.ResolvedTaskGroup;
@@ -49,6 +51,9 @@ public class SchedulerFacadeService {
                 properties.getCatalogPath() != null,
                 List.of(
                         "GET /api/scheduler/catalog",
+                        "GET /api/scheduler/lineage",
+                        "GET /api/scheduler/tasks/{taskId}/contract",
+                        "GET /api/scheduler/tasks/{taskId}/lineage",
                         "GET /api/scheduler/projects/{projectId}/workflows/{workflowId}/parameter-schema",
                         "POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/runs",
                         "GET /api/scheduler/projects/{projectId}/runs/{instanceId}/status",
@@ -60,6 +65,18 @@ public class SchedulerFacadeService {
 
     public SchedulerCatalog catalog() {
         return catalogService.load();
+    }
+
+    public LineageCatalog lineage() {
+        return catalogService.lineage();
+    }
+
+    public TaskContract taskContract(String taskId) {
+        return catalogService.task(taskId);
+    }
+
+    public Map<String, Object> taskLineage(String taskId) {
+        return catalogService.taskLineage(taskId);
     }
 
     public Map<String, Map<String, Object>> parameterSchema(String projectId, String workflowId) {

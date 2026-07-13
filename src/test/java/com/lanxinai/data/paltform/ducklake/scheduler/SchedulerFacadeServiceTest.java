@@ -53,7 +53,7 @@ class SchedulerFacadeServiceTest {
         catalogPath = tempDir.resolve("catalog.json");
         Files.writeString(catalogPath, """
                 {
-                  "schemaVersion": 1,
+                  "schemaVersion": 2,
                   "generatedFrom": "data-platform/data-platform-notebooks",
                   "gitRef": "refs/heads/codex/etl-contract-v2",
                   "execution": {
@@ -66,6 +66,11 @@ class SchedulerFacadeServiceTest {
                     "workflowInstancePriority": "HIGH",
                     "environmentCode": -1
                   },
+                  "tasks": [
+                    {"id":"app_etl.alpha","title":"Alpha","description":"Alpha task","path":"app_etl/alpha.py","entrypoint":"run_etl","parameter_profiles":[],"parameters":{},"data_contract":{"inputs":[],"outputs":[],"external_inputs":[],"intermediates":[],"transformations":[]},"execution":{}},
+                    {"id":"ods_etl.beta","title":"Beta","description":"Beta task","path":"ods_etl/beta.py","entrypoint":"run_etl","parameter_profiles":[],"parameters":{},"data_contract":{"inputs":[],"outputs":[],"external_inputs":[],"intermediates":[],"transformations":[]},"execution":{}}
+                  ],
+                  "lineage": {"schemaVersion":1,"datasets":[],"taskEdges":[],"transformations":[],"workflowEdges":[]},
                   "projects": [{
                     "id": "project-a",
                     "name": "Project A",
@@ -85,7 +90,12 @@ class SchedulerFacadeServiceTest {
                           "name": "Alpha",
                           "taskId": "app_etl.alpha",
                           "code": 1001,
-                          "taskType": "SHELL"
+                          "taskType": "SHELL",
+                          "dependsOn": [],
+                          "title": "Alpha",
+                          "description": "Alpha task",
+                          "parameters": {},
+                          "dataContract": {"inputs":[],"outputs":[],"external_inputs":[],"intermediates":[],"transformations":[]}
                         }]
                       },
                       {
@@ -102,7 +112,12 @@ class SchedulerFacadeServiceTest {
                           "name": "Beta",
                           "taskId": "ods_etl.beta",
                           "code": 2002,
-                          "taskType": "SHELL"
+                          "taskType": "SHELL",
+                          "dependsOn": [],
+                          "title": "Beta",
+                          "description": "Beta task",
+                          "parameters": {},
+                          "dataContract": {"inputs":[],"outputs":[],"external_inputs":[],"intermediates":[],"transformations":[]}
                         }]
                       }
                     ],

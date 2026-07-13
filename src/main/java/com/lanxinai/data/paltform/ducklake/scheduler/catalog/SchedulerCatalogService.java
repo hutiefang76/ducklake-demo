@@ -7,6 +7,8 @@ import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.Ma
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.ManagedTaskGroup;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.ManagedWorkflow;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.ExecutionDefaults;
+import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.LineageCatalog;
+import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.TaskContract;
 import com.lanxinai.data.paltform.ducklake.scheduler.config.SchedulerProperties;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +21,7 @@ import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -77,6 +80,37 @@ public class SchedulerCatalogService {
         return project(load(), projectId);
     }
 
+    public TaskContract task(String taskId) {
+        SchedulerCatalog catalog = load();
+        return catalog.tasks().stream()
+                .filter(task -> task.id().equals(taskId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown managed task: " + taskId));
+    }
+
+    public LineageCatalog lineage() {
+        return load().lineage();
+    }
+
+    public Map<String, Object> taskLineage(String taskId) {
+        SchedulerCatalog catalog = load();
+        TaskContract task = catalog.tasks().stream()
+                .filter(item -> item.id().equals(taskId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown managed task: " + taskId));
+        List<Map<String, Object>> edges = catalog.lineage().taskEdges().stream()
+                .filter(item -> taskId.equals(item.get("taskId")))
+                .toList();
+        List<Map<String, Object>> transformations = catalog.lineage().transformations().stream()
+                .filter(item -> taskId.equals(item.get("taskId")))
+                .toList();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("task", task);
+        result.put("taskEdges", edges);
+        result.put("transformations", transformations);
+        return java.util.Collections.unmodifiableMap(result);
+    }
+
     private static ManagedProject project(SchedulerCatalog catalog, String projectId) {
         return catalog.projects().stream()
                 .filter(project -> project.id().equals(projectId))
@@ -109,11 +143,12 @@ public class SchedulerCatalogService {
     }
 
     private void validate(SchedulerCatalog catalog) {
-        if (catalog == null || catalog.schemaVersion() != 1 || catalog.execution() == null
-                || catalog.projects() == null) {
-            throw new IllegalStateException("Scheduler catalog schemaVersion must be 1");
+        if (catalog == null || catalog.schemaVersion() != 2 || catalog.execution() == null
+                || catalog.tasks() == null || catalog.lineage() == null || catalog.projects() == null) {
+            throw new IllegalStateException("Scheduler catalog schemaVersion must be 2");
         }
         validateExecution(catalog.execution());
+        validateTasksAndLineage(catalog);
         Set<String> projectIds = new HashSet<>();
         for (ManagedProject project : catalog.projects()) {
             requireLogicalId(project.id(), "project id");
@@ -127,6 +162,29 @@ public class SchedulerCatalogService {
             }
             validateWorkflows(project);
             validateTaskGroups(project);
+        }
+    }
+
+    private static void validateTasksAndLineage(SchedulerCatalog catalog) {
+        Set<String> taskIds = new HashSet<>();
+        for (TaskContract task : catalog.tasks()) {
+            requireLogicalId(task.id(), "task id");
+            requireId(task.title(), "task title");
+            requireId(task.description(), "task description");
+            requireId(task.path(), "task path");
+            if (!"run_etl".equals(task.entrypoint()) || task.parameters() == null
+                    || task.data_contract() == null || task.execution() == null) {
+                throw new IllegalStateException("Invalid task contract: " + task.id());
+            }
+            if (!taskIds.add(task.id())) {
+                throw new IllegalStateException("Duplicate managed task: " + task.id());
+            }
+        }
+        LineageCatalog lineage = catalog.lineage();
+        if (lineage.schemaVersion() != 1 || lineage.datasets() == null
+                || lineage.taskEdges() == null || lineage.transformations() == null
+                || lineage.workflowEdges() == null) {
+            throw new IllegalStateException("Lineage catalog schemaVersion must be 1");
         }
     }
 
@@ -181,6 +239,11 @@ public class SchedulerCatalogService {
                 requireId(node.name(), "node name");
                 requireLogicalId(node.taskId(), "task id");
                 requireId(node.taskType(), "node taskType");
+                requireId(node.title(), "node title");
+                requireId(node.description(), "node description");
+                if (node.dependsOn() == null || node.parameters() == null || node.dataContract() == null) {
+                    throw new IllegalStateException("Node contract fields are required: " + node.id());
+                }
                 requirePositive(node.code(), "node code");
                 if (!nodeIds.add(node.id())) {
                     throw new IllegalStateException("Duplicate managed node: " + node.id());

@@ -2,6 +2,9 @@ package com.lanxinai.data.paltform.ducklake.scheduler.controller;
 
 import com.lanxinai.data.paltform.ducklake.scheduler.SchedulerFacadeService;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog;
+import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.LineageCatalog;
+import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.TaskContract;
+import java.util.Map;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.OperationResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.ParameterSchemaResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.QueueResponse;
@@ -43,6 +46,24 @@ public class SchedulerController {
     @Operation(summary = "读取转换平台生成的受管 Project/Workflow/Node 目录")
     public SchedulerCatalog catalog() {
         return service.catalog();
+    }
+
+    @GetMapping("/lineage")
+    @Operation(summary = "查询编译生成的全局数据集、任务和 Workflow 血缘")
+    public LineageCatalog lineage() {
+        return service.lineage();
+    }
+
+    @GetMapping("/tasks/{taskId}/contract")
+    @Operation(summary = "查询任务参数、输入、输出、中间数据集和 transformation 契约")
+    public TaskContract taskContract(@PathVariable String taskId) {
+        return service.taskContract(taskId);
+    }
+
+    @GetMapping("/tasks/{taskId}/lineage")
+    @Operation(summary = "查询单任务声明血缘")
+    public Map<String, Object> taskLineage(@PathVariable String taskId) {
+        return service.taskLineage(taskId);
     }
 
     @GetMapping("/projects/{projectId}/workflows/{workflowId}/parameter-schema")

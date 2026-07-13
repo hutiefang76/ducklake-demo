@@ -169,6 +169,8 @@ catalog 还包含 tenant、WorkerGroup、失败策略和实例优先级等环境
 每个 Workflow 必须同时提供 `parameterSchemaVersion=2`、原始 `parameterSchema` 和 `parameterSchemaSha256`。哈希对象是按所有 Map key 排序后的紧凑 canonical JSON：`{"parameterSchema":...,"schemaVersion":2}`；应用加载 catalog 时会重新计算并拒绝不一致的内容。
 
 - `GET /api/scheduler/catalog`：读取受管逻辑目录；
+- `GET /api/scheduler/lineage`：读取编译生成的数据集、任务 transformation 和 Workflow 依赖血缘；
+- `GET /api/scheduler/tasks/{taskId}/contract|lineage`：按逻辑任务 ID 读取参数、输入/输出/中间数据集和单任务血缘；
 - `GET /api/scheduler/projects/{projectId}/workflows/{workflowId}/parameter-schema`：原样返回版本化参数 schema 及其 canonical SHA-256；
 - `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/runs`：使用已有 run manifest 执行完整 Workflow；
 - `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/nodes/{nodeId}/runs`：只执行指定逻辑 Node，用于诊断和补跑；
@@ -177,6 +179,8 @@ catalog 还包含 tenant、WorkerGroup、失败策略和实例优先级等环境
 - `GET /api/scheduler/projects/{projectId}/task-groups/{taskGroupId}/queue`：TaskGroup 队列快照。
 
 队列接口明确返回 `exactPosition=false`。DolphinScheduler API 的列表顺序不能包装成权威执行名次。
+
+完整的业务功能到 DolphinScheduler API 映射和可直接执行案例见 [`docs/etl-dolphinscheduler-api-closed-loop.md`](docs/etl-dolphinscheduler-api-closed-loop.md)。
 
 ETL ledger 默认每 30 秒分批对账未终态实例，单个实例查询失败不会中断整批。`READY_STOP` 持续超过 2 分钟时，状态 API 返回 `attentionRequired=true`，提示运维检查 Master failover；该告警不会把原始 DolphinScheduler 状态改写成伪造的 `STOP`。对账开关、间隔、阈值和批量上限分别由 `ETL_RECONCILIATION_ENABLED`、`ETL_RECONCILIATION_FIXED_DELAY`、`ETL_READY_STOP_STALE_AFTER` 和 `ETL_RECONCILIATION_BATCH_SIZE` 配置。
 

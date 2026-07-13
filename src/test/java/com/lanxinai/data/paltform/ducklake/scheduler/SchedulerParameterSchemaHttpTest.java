@@ -88,6 +88,35 @@ class SchedulerParameterSchemaHttpTest {
     }
 
     @Test
+    void servesTaskContractAndDeclaredLineageOverRealHttp() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        String base = "http://127.0.0.1:" + port + "/api/scheduler";
+        HttpResponse<String> contractResponse = client.send(
+                HttpRequest.newBuilder(URI.create(base
+                        + "/tasks/mdm_etl.dq_check_mdm_material/contract")).GET().build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> lineageResponse = client.send(
+                HttpRequest.newBuilder(URI.create(base
+                        + "/tasks/mdm_etl.dq_check_mdm_material/lineage")).GET().build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode contract = mapper.readTree(contractResponse.body());
+        JsonNode lineage = mapper.readTree(lineageResponse.body());
+
+        assertThat(contractResponse.statusCode()).isEqualTo(200);
+        assertThat(contract.path("data_contract").path("inputs")).hasSize(1);
+        assertThat(contract.path("data_contract").path("outputs")).hasSize(1);
+        assertThat(contract.path("data_contract").path("intermediates")).isEmpty();
+        assertThat(contract.path("data_contract").path("transformations")).hasSize(1);
+        assertThat(lineageResponse.statusCode()).isEqualTo(200);
+        assertThat(lineage.path("taskEdges")).hasSize(1);
+        assertThat(lineage.path("transformations")).hasSize(1);
+        assertThat(lineage.path("task").path("id").asText())
+                .isEqualTo("mdm_etl.dq_check_mdm_material");
+    }
+
+    @Test
     void rejectsUnownedWorkflowInstanceOverRealHttp() throws Exception {
         URI uri = URI.create("http://127.0.0.1:" + port
                 + "/api/scheduler/projects/notebooks-etl/runs/999/status");
