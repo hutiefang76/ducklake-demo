@@ -19,6 +19,7 @@ public class DuckLakeProperties {
     private String s3SecretKey;
     private String dataPath;
     private String attachName = "my_lake";
+    private String metadataSchema = "public";
     private String schemaName = "main";
     private String duckdbPath;
     private String extensionDirectory;
@@ -36,6 +37,7 @@ public class DuckLakeProperties {
         require(s3SecretKey, "S3_SECRET_KEY");
         require(dataPath, "DUCKLAKE_DATA_PATH");
         SqlIdentifier.requireValid(attachName, "DUCKLAKE_ATTACH_NAME");
+        SqlIdentifier.requireValid(metadataSchema, "DUCKLAKE_METADATA_SCHEMA");
         SqlIdentifier.requireValid(schemaName, "DUCKLAKE_DEMO_SCHEMA");
         if (pgPort < 1 || pgPort > 65535) {
             throw new IllegalStateException("PG_PORT must be between 1 and 65535");
@@ -79,6 +81,8 @@ public class DuckLakeProperties {
     public void setDataPath(String dataPath) { this.dataPath = dataPath; }
     public String getAttachName() { return attachName; }
     public void setAttachName(String attachName) { this.attachName = attachName; }
+    public String getMetadataSchema() { return metadataSchema; }
+    public void setMetadataSchema(String metadataSchema) { this.metadataSchema = metadataSchema; }
     public String getSchemaName() { return schemaName; }
     public void setSchemaName(String schemaName) { this.schemaName = schemaName; }
     public String getDuckdbPath() { return duckdbPath; }

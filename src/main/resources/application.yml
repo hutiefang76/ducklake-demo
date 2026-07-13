@@ -54,6 +54,7 @@ ducklake:
   s3-secret-key: ${S3_SECRET_KEY:}
   data-path: ${DUCKLAKE_DATA_PATH:}
   attach-name: ${DUCKLAKE_ATTACH_NAME:my_lake}
+  metadata-schema: ${DUCKLAKE_METADATA_SCHEMA:public}
   schema-name: ${DUCKLAKE_DEMO_SCHEMA:main}
   duckdb-path: ${DUCKDB_PATH:}
   extension-directory: ${DUCKDB_EXTENSION_DIRECTORY:}

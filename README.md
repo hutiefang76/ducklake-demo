@@ -185,6 +185,8 @@ catalog 还包含 tenant、WorkerGroup、失败策略和实例优先级等环境
 
 DuckLake 自身的数据文件仍使用 `s3://dp-ducklake/data-platform-dev/ducklake/`，两者不得混用。应用使用 S3 path-style 寻址；Bucket、Prefix、Endpoint、Region 均通过环境变量配置。
 
+现有 PostgreSQL DuckLake catalog 使用 `ducklake_catalog` schema，运行环境需设置 `DUCKLAKE_METADATA_SCHEMA=ducklake_catalog`。应用通过 DuckLake `ATTACH ... (METADATA_SCHEMA ...)` 连接既有 catalog，不在 `public` schema 误建第二套 metadata 表。
+
 ### 上传文件
 
 下面的调用以流式方式上传，不把整个文件载入 JVM 内存。返回值包含 `artifactId`、`uri`、大小和 SHA-256：

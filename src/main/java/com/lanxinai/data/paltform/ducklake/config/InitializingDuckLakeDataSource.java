@@ -65,7 +65,8 @@ final class InitializingDuckLakeDataSource implements DataSource {
                     + " client_encoding=" + libpqValue(properties.getPgClientEncoding());
             String attachSql = "ATTACH " + sqlLiteral(metadata)
                     + " AS " + SqlIdentifier.quote(properties.getAttachName())
-                    + " (DATA_PATH " + sqlLiteral(properties.getDataPath()) + ")";
+                    + " (DATA_PATH " + sqlLiteral(properties.getDataPath())
+                    + ", METADATA_SCHEMA " + sqlLiteral(properties.getMetadataSchema()) + ")";
             statement.execute(attachSql);
             statement.execute("USE " + SqlIdentifier.quote(properties.getAttachName()));
             long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
