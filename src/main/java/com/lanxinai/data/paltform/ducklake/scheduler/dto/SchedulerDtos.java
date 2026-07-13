@@ -21,6 +21,14 @@ public final class SchedulerDtos {
     public record RunManifestRef(String runId, String uri, String sha256) {
     }
 
+    public record ParameterSchemaResponse(
+            String projectId,
+            String workflowId,
+            int schemaVersion,
+            String sha256,
+            Map<String, Map<String, Object>> parameterSchema) {
+    }
+
     public record RunResponse(
             String projectId,
             String workflowId,

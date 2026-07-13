@@ -35,6 +35,8 @@ public record SchedulerCatalog(
             long code,
             String runManifestParameter,
             String runManifestSha256Parameter,
+            int parameterSchemaVersion,
+            String parameterSchemaSha256,
             Map<String, Map<String, Object>> parameterSchema,
             List<ManagedNode> nodes) {
     }

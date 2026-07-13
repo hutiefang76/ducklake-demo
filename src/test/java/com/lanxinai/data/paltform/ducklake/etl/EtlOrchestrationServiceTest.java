@@ -47,7 +47,12 @@ class EtlOrchestrationServiceTest {
                         "delta_uri", Map.of("type", "uri", "required", true,
                                 "allowed_schemes", List.of("s3", "file")),
                         "plan_id", Map.of("type", "string", "required", true),
-                        "version_id", Map.of("type", "string", "required", true)));
+                        "version_id", Map.of("type", "string", "required", true),
+                        "mode", Map.of(
+                                "type", "string", "required", false, "default", "full"),
+                        "business_date", Map.of(
+                                "type", "date", "required", true,
+                                "default_from", "runtime.business_date")));
     }
 
     @Test
@@ -71,6 +76,10 @@ class EtlOrchestrationServiceTest {
                 .isEqualTo("s3://dp-springboot-files/input/material.parquet");
         assertThat(manifest.path("parameters").path("plan_id").asText()).isEqualTo("plan-7");
         assertThat(manifest.path("parameters").path("version_id").asText()).isEqualTo("v3");
+        assertThat(manifest.path("parameters").path("mode").asText()).isEqualTo("full");
+        assertThat(manifest.path("parameters").path("business_date").asText())
+                .isEqualTo(manifest.path("runtime").path("business_date").asText());
+        assertThat(manifest.path("runtime").path("request_date").asText()).isNotBlank();
         verify(ledger).createRun(anyString(), org.mockito.ArgumentMatchers.eq("material-project"),
                 org.mockito.ArgumentMatchers.eq("material-workflow"), anyString(), anyString(),
                 org.mockito.ArgumentMatchers.eq("doctor"));

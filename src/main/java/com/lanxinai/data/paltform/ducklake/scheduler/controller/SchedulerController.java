@@ -3,6 +3,7 @@ package com.lanxinai.data.paltform.ducklake.scheduler.controller;
 import com.lanxinai.data.paltform.ducklake.scheduler.SchedulerFacadeService;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.OperationResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.ParameterSchemaResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.QueueResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunLogResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRequest;
@@ -42,6 +43,14 @@ public class SchedulerController {
     @Operation(summary = "读取转换平台生成的受管 Project/Workflow/Node 目录")
     public SchedulerCatalog catalog() {
         return service.catalog();
+    }
+
+    @GetMapping("/projects/{projectId}/workflows/{workflowId}/parameter-schema")
+    @Operation(summary = "读取版本化 ETL 参数 schema 与 canonical SHA-256")
+    public ParameterSchemaResponse parameterSchema(
+            @PathVariable String projectId,
+            @PathVariable String workflowId) {
+        return service.parameterSchemaDescriptor(projectId, workflowId);
     }
 
     @PostMapping("/projects/{projectId}/workflows/{workflowId}/runs")

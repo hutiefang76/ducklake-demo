@@ -166,8 +166,10 @@ ETL_SCHEDULER_CATALOG_PATH=/etc/data-platform/etl-scheduler-catalog.json
 
 Project、Workflow、Node 和 TaskGroup 均来自 catalog。Spring Boot 不固定业务 code，也不接受客户端传入任意 DolphinScheduler URL 或 numeric code。
 catalog 还包含 tenant、WorkerGroup、失败策略和实例优先级等环境执行参数；应用在每次请求时重新加载，转换平台更新 catalog 后不需要修改 Java 代码或重启应用。
+每个 Workflow 必须同时提供 `parameterSchemaVersion=2`、原始 `parameterSchema` 和 `parameterSchemaSha256`。哈希对象是按所有 Map key 排序后的紧凑 canonical JSON：`{"parameterSchema":...,"schemaVersion":2}`；应用加载 catalog 时会重新计算并拒绝不一致的内容。
 
 - `GET /api/scheduler/catalog`：读取受管逻辑目录；
+- `GET /api/scheduler/projects/{projectId}/workflows/{workflowId}/parameter-schema`：原样返回版本化参数 schema 及其 canonical SHA-256；
 - `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/runs`：使用已有 run manifest 执行完整 Workflow；
 - `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/nodes/{nodeId}/runs`：只执行指定逻辑 Node，用于诊断和补跑；
 - `GET /api/scheduler/projects/{projectId}/runs/{instanceId}/status|tasks|log`：状态、任务和日志；

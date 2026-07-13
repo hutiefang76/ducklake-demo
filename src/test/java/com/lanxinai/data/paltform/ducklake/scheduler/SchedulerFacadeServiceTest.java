@@ -37,6 +37,7 @@ class SchedulerFacadeServiceTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private MockWebServer server;
     private SchedulerFacadeService facade;
+    private SchedulerCatalogService catalogService;
     private Path catalogPath;
 
     @BeforeEach
@@ -70,6 +71,8 @@ class SchedulerFacadeServiceTest {
                         "code": 77,
                         "runManifestParameter": "run_manifest_uri",
                         "runManifestSha256Parameter": "run_manifest_sha256",
+                        "parameterSchemaVersion": 2,
+                        "parameterSchemaSha256": "02e62208cd0f113432d1c105c11cb7693024ce3583a0549bab1b2e1b8ddb5f59",
                         "parameterSchema": {},
                         "nodes": [{
                           "id": "node-alpha",
@@ -85,6 +88,8 @@ class SchedulerFacadeServiceTest {
                         "code": 88,
                         "runManifestParameter": "run_manifest_uri",
                         "runManifestSha256Parameter": "run_manifest_sha256",
+                        "parameterSchemaVersion": 2,
+                        "parameterSchemaSha256": "02e62208cd0f113432d1c105c11cb7693024ce3583a0549bab1b2e1b8ddb5f59",
                         "parameterSchema": {},
                         "nodes": [{
                           "id": "node-beta",
@@ -111,10 +116,53 @@ class SchedulerFacadeServiceTest {
         properties.setCatalogPath(catalogPath);
         properties.setRequestTimeout(Duration.ofSeconds(5));
 
-        SchedulerCatalogService catalog = new SchedulerCatalogService(properties, mapper);
+        catalogService = new SchedulerCatalogService(properties, mapper);
         DolphinSchedulerClient client = new DolphinSchedulerClient(
                 properties, mapper, HttpClient.newHttpClient());
-        facade = new SchedulerFacadeService(properties, catalog, client);
+        facade = new SchedulerFacadeService(properties, catalogService, client);
+    }
+
+    @Test
+    void exposesVersionedParameterSchemaWithoutTransformingCatalogData() {
+        var descriptor = facade.parameterSchemaDescriptor("project-a", "workflow-a");
+
+        assertThat(descriptor.projectId()).isEqualTo("project-a");
+        assertThat(descriptor.workflowId()).isEqualTo("workflow-a");
+        assertThat(descriptor.schemaVersion()).isEqualTo(2);
+        assertThat(descriptor.sha256())
+                .isEqualTo("02e62208cd0f113432d1c105c11cb7693024ce3583a0549bab1b2e1b8ddb5f59");
+        assertThat(descriptor.parameterSchema()).isEmpty();
+        assertThat(facade.parameterSchema("project-a", "workflow-a"))
+                .isEqualTo(descriptor.parameterSchema());
+    }
+
+    @Test
+    void canonicalSchemaHashIsIndependentOfMapInsertionOrder() {
+        Map<String, Map<String, Object>> first = new LinkedHashMap<>();
+        first.put("request_date", Map.of(
+                "type", "date", "required", false,
+                "default_from", "runtime.request_date"));
+        first.put("mode", Map.of(
+                "type", "enum", "required", false,
+                "values", java.util.List.of("full", "delta")));
+        Map<String, Map<String, Object>> reversed = new LinkedHashMap<>();
+        reversed.put("mode", first.get("mode"));
+        reversed.put("request_date", first.get("request_date"));
+
+        assertThat(catalogService.parameterSchemaSha256(2, first))
+                .isEqualTo("36f20023dcb6c66730db1280ba9d2b7dd22d286439d86fac20b48061608c459e")
+                .isEqualTo(catalogService.parameterSchemaSha256(2, reversed));
+    }
+
+    @Test
+    void rejectsCatalogWhenDeclaredSchemaHashDoesNotMatchRawSchema() throws Exception {
+        String catalog = Files.readString(catalogPath);
+        Files.writeString(catalogPath, catalog.replaceFirst(
+                "02e62208cd0f113432d1c105c11cb7693024ce3583a0549bab1b2e1b8ddb5f59",
+                "f".repeat(64)));
+
+        assertThatThrownBy(catalogService::load)
+                .hasMessageContaining("parameterSchemaSha256 does not match");
     }
 
     @AfterEach

@@ -8,6 +8,7 @@ import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogSer
 import com.lanxinai.data.paltform.ducklake.scheduler.client.DolphinSchedulerClient;
 import com.lanxinai.data.paltform.ducklake.scheduler.config.SchedulerProperties;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.OperationResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.ParameterSchemaResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.QueueResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunLogResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRequest;
@@ -44,6 +45,7 @@ public class SchedulerFacadeService {
                 properties.getCatalogPath() != null,
                 List.of(
                         "GET /api/scheduler/catalog",
+                        "GET /api/scheduler/projects/{projectId}/workflows/{workflowId}/parameter-schema",
                         "POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/runs",
                         "GET /api/scheduler/projects/{projectId}/runs/{instanceId}/status",
                         "GET /api/scheduler/projects/{projectId}/runs/{instanceId}/tasks",
@@ -57,7 +59,18 @@ public class SchedulerFacadeService {
     }
 
     public Map<String, Map<String, Object>> parameterSchema(String projectId, String workflowId) {
-        return Map.copyOf(catalogService.resolveWorkflow(projectId, workflowId).workflow().parameterSchema());
+        return parameterSchemaDescriptor(projectId, workflowId).parameterSchema();
+    }
+
+    public ParameterSchemaResponse parameterSchemaDescriptor(String projectId, String workflowId) {
+        ResolvedWorkflow resolved = catalogService.resolveWorkflow(projectId, workflowId);
+        var workflow = resolved.workflow();
+        return new ParameterSchemaResponse(
+                resolved.project().id(),
+                workflow.id(),
+                workflow.parameterSchemaVersion(),
+                workflow.parameterSchemaSha256(),
+                java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(workflow.parameterSchema())));
     }
 
     public RunResponse startRun(String projectId, String workflowId, RunRequest request) {

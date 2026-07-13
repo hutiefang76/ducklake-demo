@@ -1,6 +1,7 @@
 package com.lanxinai.data.paltform.ducklake.scheduler.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.ManagedNode;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.ManagedProject;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog.ManagedTaskGroup;
@@ -12,7 +13,12 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -23,10 +29,13 @@ public class SchedulerCatalogService {
 
     private final SchedulerProperties properties;
     private final ObjectMapper mapper;
+    private final ObjectMapper canonicalMapper;
 
     public SchedulerCatalogService(SchedulerProperties properties, ObjectMapper mapper) {
         this.properties = properties;
         this.mapper = mapper;
+        this.canonicalMapper = mapper.copy()
+                .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
     }
 
     public SchedulerCatalog load() {
@@ -99,7 +108,7 @@ public class SchedulerCatalogService {
                         "Unknown managed task group: " + project.id() + "/" + taskGroupId));
     }
 
-    private static void validate(SchedulerCatalog catalog) {
+    private void validate(SchedulerCatalog catalog) {
         if (catalog == null || catalog.schemaVersion() != 1 || catalog.execution() == null
                 || catalog.projects() == null) {
             throw new IllegalStateException("Scheduler catalog schemaVersion must be 1");
@@ -136,7 +145,7 @@ public class SchedulerCatalogService {
         }
     }
 
-    private static void validateWorkflows(ManagedProject project) {
+    private void validateWorkflows(ManagedProject project) {
         Set<String> ids = new HashSet<>();
         for (ManagedWorkflow workflow : project.workflows()) {
             requireLogicalId(workflow.id(), "workflow id");
@@ -146,6 +155,19 @@ public class SchedulerCatalogService {
             requireLogicalId(workflow.runManifestSha256Parameter(), "runManifestSha256Parameter");
             if (workflow.parameterSchema() == null) {
                 throw new IllegalStateException("Workflow parameterSchema is required: " + workflow.id());
+            }
+            if (workflow.parameterSchemaVersion() != 2) {
+                throw new IllegalStateException(
+                        "Workflow parameterSchemaVersion must be 2: " + workflow.id());
+            }
+            requireId(workflow.parameterSchemaSha256(), "workflow parameterSchemaSha256");
+            String actualSchemaHash = parameterSchemaSha256(
+                    workflow.parameterSchemaVersion(), workflow.parameterSchema());
+            if (!MessageDigest.isEqual(
+                    actualSchemaHash.getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                    workflow.parameterSchemaSha256().getBytes(java.nio.charset.StandardCharsets.US_ASCII))) {
+                throw new IllegalStateException(
+                        "Workflow parameterSchemaSha256 does not match parameterSchema: " + workflow.id());
             }
             if (!ids.add(workflow.id())) {
                 throw new IllegalStateException("Duplicate managed workflow: " + workflow.id());
@@ -164,6 +186,24 @@ public class SchedulerCatalogService {
                     throw new IllegalStateException("Duplicate managed node: " + node.id());
                 }
             }
+        }
+    }
+
+    /**
+     * Hashes the compact canonical JSON object
+     * {"parameterSchema":...,"schemaVersion":...}, with every map key sorted.
+     */
+    public String parameterSchemaSha256(
+            int schemaVersion,
+            Map<String, Map<String, Object>> parameterSchema) {
+        Map<String, Object> versionedSchema = new LinkedHashMap<>();
+        versionedSchema.put("schemaVersion", schemaVersion);
+        versionedSchema.put("parameterSchema", parameterSchema);
+        try {
+            byte[] canonicalJson = canonicalMapper.writeValueAsBytes(versionedSchema);
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonicalJson));
+        } catch (IOException | NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("Unable to canonicalize workflow parameter schema", exception);
         }
     }
 

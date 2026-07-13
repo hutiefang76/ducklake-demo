@@ -10,6 +10,7 @@ import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRespon
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -67,20 +68,25 @@ public class EtlOrchestrationService {
     public SubmittedRun start(String projectId, String workflowId, Map<String, Object> parameters,
                               String requestedBy, String reason) {
         Map<String, Object> rawParameters = parameters == null ? Map.of() : parameters;
-        parameterValidator.validate(scheduler.parameterSchema(projectId, workflowId), rawParameters);
-        Map<String, Object> supplied = Map.copyOf(rawParameters);
         String identity = blank(requestedBy) ? "demo-user" : requestedBy.trim();
         if (identity.length() > 200) throw new IllegalArgumentException("requestedBy must not exceed 200 characters");
+        Instant requestTimestamp = Instant.now();
+        String requestDate = requestTimestamp.atZone(ZoneOffset.UTC).toLocalDate().toString();
+        Map<String, Object> runtime = new LinkedHashMap<>();
+        runtime.put("business_date", requestDate);
+        runtime.put("request_date", requestDate);
+        runtime.put("request_timestamp", requestTimestamp.toString());
+        runtime.put("requested_by", identity);
+        runtime.put("reason", reason == null ? "" : reason);
+        Map<String, Object> supplied = parameterValidator.validate(
+                scheduler.parameterSchema(projectId, workflowId), rawParameters, runtime);
         String runId = "run_" + UUID.randomUUID().toString().replace("-", "");
         Map<String, Object> manifest = new LinkedHashMap<>();
         manifest.put("schema_version", 1);
         manifest.put("kind", "etl_run_manifest");
         manifest.put("run_id", runId);
         manifest.put("parameters", supplied);
-        manifest.put("runtime", Map.of(
-                "requested_by", identity,
-                "reason", reason == null ? "" : reason,
-                "request_timestamp", Instant.now().toString()));
+        manifest.put("runtime", runtime);
         byte[] bytes;
         try {
             bytes = mapper.writeValueAsBytes(manifest);
