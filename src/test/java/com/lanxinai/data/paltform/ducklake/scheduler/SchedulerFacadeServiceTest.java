@@ -155,6 +155,20 @@ class SchedulerFacadeServiceTest {
     }
 
     @Test
+    void canonicalSchemaHashUsesRawUtf8ForChineseDescriptions() {
+        Map<String, Map<String, Object>> schema = Map.of(
+                "check_scope", Map.of(
+                        "type", "enum",
+                        "description", "检查范围：全部物料或指定物料编码前缀。",
+                        "required", false,
+                        "default", "all",
+                        "values", java.util.List.of("all", "prefix")));
+
+        assertThat(catalogService.parameterSchemaSha256(2, schema))
+                .isEqualTo("a42c3cf149691935bb6b4788beb046c7d3fbf436247e1cf37fe40f3fa7df0d4f");
+    }
+
+    @Test
     void rejectsCatalogWhenDeclaredSchemaHashDoesNotMatchRawSchema() throws Exception {
         String catalog = Files.readString(catalogPath);
         Files.writeString(catalogPath, catalog.replaceFirst(

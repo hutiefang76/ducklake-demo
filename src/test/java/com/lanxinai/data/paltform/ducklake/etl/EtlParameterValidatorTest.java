@@ -124,6 +124,22 @@ class EtlParameterValidatorTest {
                 .hasMessageContaining("must not be null");
     }
 
+    @Test
+    void rejectsStringThatDoesNotMatchTheDeclaredPattern() {
+        Map<String, Map<String, Object>> patternSchema = Map.of(
+                "material_code_prefix", Map.of(
+                        "type", "string",
+                        "required", true,
+                        "pattern", "^[A-Za-z0-9_-]+$"));
+
+        assertThat(validator.validate(
+                patternSchema, Map.of("material_code_prefix", "1001-A")))
+                .containsEntry("material_code_prefix", "1001-A");
+        assertThatThrownBy(() -> validator.validate(
+                patternSchema, Map.of("material_code_prefix", "1001' OR 1=1")))
+                .hasMessageContaining("does not match pattern");
+    }
+
     private void assertConditionRequiresValue(
             String operator,
             Object expected,
