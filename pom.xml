@@ -22,6 +22,7 @@
     <duckdb.version>1.5.4.0</duckdb.version>
     <mybatis-spring-boot.version>4.0.0</mybatis-spring-boot.version>
     <springdoc-openapi.version>3.0.3</springdoc-openapi.version>
+    <okhttp.version>4.12.0</okhttp.version>
   </properties>
 
   <dependencies>
@@ -55,6 +56,12 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>mockwebserver</artifactId>
+      <version>${okhttp.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

@@ -1,5 +1,6 @@
 package com.lanxinai.data.paltform.ducklake.controller;
 
+import com.lanxinai.data.paltform.ducklake.scheduler.client.SchedulerClientException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,19 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of(
                 "status", 400,
                 "error", exception.getMessage(),
+                "timestamp", Instant.now().toString()
+        ));
+    }
+
+    @ExceptionHandler(SchedulerClientException.class)
+    public ResponseEntity<Map<String, Object>> schedulerUpstreamError(
+            SchedulerClientException exception) {
+        String errorId = UUID.randomUUID().toString();
+        log.error("DolphinScheduler API 调用失败，errorId={}", errorId, exception);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of(
+                "status", 502,
+                "error", "DolphinScheduler upstream request failed",
+                "errorId", errorId,
                 "timestamp", Instant.now().toString()
         ));
     }

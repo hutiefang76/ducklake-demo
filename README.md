@@ -6,6 +6,7 @@
 - SeaweedFS S3 保存 DuckLake Parquet 数据文件；
 - Java 进程内嵌 DuckDB JDBC，加载 `httpfs`、`postgres`、`ducklake` extension；
 - 同一张测试表分别由原生 JDBC、Spring `JdbcTemplate`、MyBatis、JPA/Hibernate 操作。
+- 可选的 DolphinScheduler facade 按转换平台生成的逻辑目录调用任意受管 Project、Workflow 和 Node。
 
 包名按要求使用 `com.lanxinai.data.paltform.ducklake`。其中 `paltform` 保留了指定拼写。
 
@@ -151,6 +152,28 @@ Invoke-RestMethod -Method Post "http://127.0.0.1:8080/api/ducklake/mybatis/scena
 ```powershell
 .\scripts\smoke-crud.ps1 -InsertN 5 -UpdateN 3 -DeleteN 2
 ```
+
+## DolphinScheduler facade
+
+Facade 默认关闭。启用时只配置 DolphinScheduler 入口、服务端凭据和转换平台生成的 catalog 文件：
+
+```text
+DS_ENABLED=true
+DS_BASE_URL=http://dolphinscheduler-api:12345/dolphinscheduler
+DS_TOKEN=<Kubernetes Secret 注入>
+ETL_SCHEDULER_CATALOG_PATH=/etc/data-platform/etl-scheduler-catalog.json
+```
+
+Project、Workflow、Node 和 TaskGroup 均来自 catalog。Spring Boot 不固定业务 code，也不接受客户端传入任意 DolphinScheduler URL 或 numeric code。
+catalog 还包含 tenant、WorkerGroup、失败策略和实例优先级等环境执行参数；应用在每次请求时重新加载，转换平台更新 catalog 后不需要修改 Java 代码或重启应用。
+
+- `GET /api/scheduler/catalog`：读取受管逻辑目录；
+- `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/runs`：执行指定逻辑 Node；
+- `GET /api/scheduler/projects/{projectId}/runs/{instanceId}/status|tasks|log`：状态、任务和日志；
+- `POST /api/scheduler/projects/{projectId}/runs/{instanceId}/stop`：停止实例；
+- `GET /api/scheduler/projects/{projectId}/task-groups/{taskGroupId}/queue`：TaskGroup 队列快照。
+
+队列接口明确返回 `exactPosition=false`。DolphinScheduler API 的列表顺序不能包装成权威执行名次。
 
 ## 构建
 

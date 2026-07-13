@@ -1,0 +1,96 @@
+package com.lanxinai.data.paltform.ducklake.scheduler.controller;
+
+import com.lanxinai.data.paltform.ducklake.scheduler.SchedulerFacadeService;
+import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.OperationResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.QueueResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunLogResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRequest;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunStatusResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunTasksResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.SchedulerMetaResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/scheduler")
+@Tag(name = "DolphinScheduler facade")
+public class SchedulerController {
+
+    private final SchedulerFacadeService service;
+
+    public SchedulerController(SchedulerFacadeService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/meta")
+    @Operation(summary = "查询安全配置状态")
+    public SchedulerMetaResponse meta() {
+        return service.meta();
+    }
+
+    @GetMapping("/catalog")
+    @Operation(summary = "读取转换平台生成的受管 Project/Workflow/Node 目录")
+    public SchedulerCatalog catalog() {
+        return service.catalog();
+    }
+
+    @PostMapping("/projects/{projectId}/workflows/{workflowId}/runs")
+    @Operation(summary = "按逻辑 Project/Workflow/Node ID 执行一个节点")
+    public RunResponse start(
+            @PathVariable String projectId,
+            @PathVariable String workflowId,
+            @RequestBody RunRequest request) {
+        return service.startRun(projectId, workflowId, request);
+    }
+
+    @GetMapping("/projects/{projectId}/runs/{instanceId}/status")
+    public RunStatusResponse status(
+            @PathVariable String projectId,
+            @PathVariable long instanceId) {
+        return service.status(projectId, instanceId);
+    }
+
+    @GetMapping("/projects/{projectId}/runs/{instanceId}/tasks")
+    public RunTasksResponse tasks(
+            @PathVariable String projectId,
+            @PathVariable long instanceId) {
+        return service.tasks(projectId, instanceId);
+    }
+
+    @GetMapping("/projects/{projectId}/runs/{instanceId}/log")
+    public RunLogResponse log(
+            @PathVariable String projectId,
+            @PathVariable long instanceId,
+            @RequestParam(required = false) Long taskInstanceId,
+            @RequestParam(defaultValue = "0") int skipLineNum,
+            @RequestParam(defaultValue = "20000") int limit) {
+        return service.log(projectId, instanceId, taskInstanceId, skipLineNum, limit);
+    }
+
+    @PostMapping("/projects/{projectId}/runs/{instanceId}/stop")
+    public OperationResponse stop(
+            @PathVariable String projectId,
+            @PathVariable long instanceId) {
+        return service.stop(projectId, instanceId);
+    }
+
+    @GetMapping("/projects/{projectId}/task-groups/{taskGroupId}/queue")
+    @Operation(summary = "读取 TaskGroup 队列快照", description = "snapshotIndex 不是权威执行名次。")
+    public QueueResponse queue(
+            @PathVariable String projectId,
+            @PathVariable String taskGroupId,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return service.queue(projectId, taskGroupId, status, pageNo, pageSize);
+    }
+}

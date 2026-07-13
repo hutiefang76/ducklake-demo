@@ -60,6 +60,17 @@ ducklake:
   install-extensions: ${DUCKLAKE_INSTALL_EXTENSIONS:true}
   maximum-pool-size: ${DUCKLAKE_POOL_SIZE:1}
 
+# Project/Workflow/Node 不写在应用配置中，由转换平台生成的 catalog 提供。
+scheduler:
+  enabled: ${DS_ENABLED:false}
+  base-url: ${DS_BASE_URL:}
+  token: ${DS_TOKEN:}
+  username: ${DS_USERNAME:}
+  password: ${DS_PASSWORD:}
+  catalog-path: ${ETL_SCHEDULER_CATALOG_PATH:}
+  connect-timeout: ${DS_CONNECT_TIMEOUT:10s}
+  request-timeout: ${DS_REQUEST_TIMEOUT:60s}
+
 logging:
   file:
     # 除控制台外同时保存本机日志，便于演示后追溯做了什么；*.log 已被 Git 忽略。
