@@ -13,6 +13,7 @@ import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.Operation
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.QueueItem;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.QueueResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunLogResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunManifestRef;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunStatusResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunTasksResponse;
@@ -54,10 +55,31 @@ public class DolphinSchedulerClient {
             ManagedProject project,
             ManagedWorkflow workflow,
             ManagedNode node,
-            Map<String, Object> params) {
-        Map<String, String> startParams = new LinkedHashMap<>();
-        startParams.put(workflow.taskIdParameter(), node.taskId());
-        startParams.put(workflow.paramsParameter(), writeJson(params == null ? Map.of() : params));
+            RunManifestRef manifest) {
+        return start(execution, project, workflow, node, manifest);
+    }
+
+    public RunResponse startWorkflow(
+            ExecutionDefaults execution,
+            ManagedProject project,
+            ManagedWorkflow workflow,
+            RunManifestRef manifest) {
+        return start(execution, project, workflow, null, manifest);
+    }
+
+    private RunResponse start(
+            ExecutionDefaults execution,
+            ManagedProject project,
+            ManagedWorkflow workflow,
+            ManagedNode node,
+            RunManifestRef manifest) {
+        if (manifest == null || manifest.uri() == null || manifest.uri().isBlank()
+                || manifest.sha256() == null || manifest.sha256().isBlank()) {
+            throw new IllegalArgumentException("run manifest URI and SHA-256 are required");
+        }
+        List<Map<String, String>> startParams = List.of(
+                Map.of("prop", workflow.runManifestParameter(), "direct", "IN", "type", "VARCHAR", "value", manifest.uri()),
+                Map.of("prop", workflow.runManifestSha256Parameter(), "direct", "IN", "type", "VARCHAR", "value", manifest.sha256()));
 
         Map<String, String> form = new LinkedHashMap<>();
         form.put("workflowDefinitionCode", Long.toString(workflow.code()));
@@ -67,7 +89,9 @@ public class DolphinSchedulerClient {
         form.put("warningType", execution.warningType());
         form.put("warningGroupId", Integer.toString(execution.warningGroupId()));
         form.put("execType", "START_PROCESS");
-        form.put("startNodeList", Long.toString(node.code()));
+        if (node != null) {
+            form.put("startNodeList", Long.toString(node.code()));
+        }
         form.put("taskDependType", "TASK_POST");
         form.put("runMode", execution.runMode());
         form.put("workflowInstancePriority", execution.workflowInstancePriority());
@@ -86,7 +110,9 @@ public class DolphinSchedulerClient {
             throw new SchedulerClientException(
                     "DolphinScheduler accepted the run but returned no workflow instance id");
         }
-        return new RunResponse(project.id(), workflow.id(), node.id(), node.taskId(), instanceId);
+        return new RunResponse(
+                project.id(), workflow.id(), node == null ? null : node.id(),
+                node == null ? null : node.taskId(), instanceId);
     }
 
     public RunStatusResponse runStatus(ManagedProject project, long instanceId) {

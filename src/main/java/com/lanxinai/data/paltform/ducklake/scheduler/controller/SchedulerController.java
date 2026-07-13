@@ -6,6 +6,7 @@ import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.Operation
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.QueueResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunLogResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRequest;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunManifestRef;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunStatusResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunTasksResponse;
@@ -44,12 +45,25 @@ public class SchedulerController {
     }
 
     @PostMapping("/projects/{projectId}/workflows/{workflowId}/runs")
-    @Operation(summary = "按逻辑 Project/Workflow/Node ID 执行一个节点")
+    @Operation(summary = "按逻辑 Project/Workflow ID 执行完整工作流")
     public RunResponse start(
             @PathVariable String projectId,
             @PathVariable String workflowId,
-            @RequestBody RunRequest request) {
-        return service.startRun(projectId, workflowId, request);
+            @RequestBody RunManifestRef manifest) {
+        return service.startWorkflow(projectId, workflowId, manifest);
+    }
+
+    @PostMapping("/projects/{projectId}/workflows/{workflowId}/nodes/{nodeId}/runs")
+    @Operation(summary = "诊断或补数时执行一个受管节点")
+    public RunResponse startNode(
+            @PathVariable String projectId,
+            @PathVariable String workflowId,
+            @PathVariable String nodeId,
+            @RequestBody RunManifestRef manifest) {
+        return service.startRun(
+                projectId,
+                workflowId,
+                new RunRequest(nodeId, manifest.uri(), manifest.sha256()));
     }
 
     @GetMapping("/projects/{projectId}/runs/{instanceId}/status")

@@ -52,6 +52,12 @@ public class SchedulerCatalogService {
         return new ResolvedRun(catalog.execution(), project, workflow, node);
     }
 
+    public ResolvedWorkflow resolveWorkflow(String projectId, String workflowId) {
+        SchedulerCatalog catalog = load();
+        ManagedProject project = project(catalog, projectId);
+        return new ResolvedWorkflow(catalog.execution(), project, workflow(project, workflowId));
+    }
+
     public ResolvedTaskGroup resolveTaskGroup(String projectId, String taskGroupId) {
         SchedulerCatalog catalog = load();
         ManagedProject project = project(catalog, projectId);
@@ -136,8 +142,11 @@ public class SchedulerCatalogService {
             requireLogicalId(workflow.id(), "workflow id");
             requireId(workflow.name(), "workflow name");
             requirePositive(workflow.code(), "workflow code");
-            requireLogicalId(workflow.taskIdParameter(), "taskIdParameter");
-            requireLogicalId(workflow.paramsParameter(), "paramsParameter");
+            requireLogicalId(workflow.runManifestParameter(), "runManifestParameter");
+            requireLogicalId(workflow.runManifestSha256Parameter(), "runManifestSha256Parameter");
+            if (workflow.parameterSchema() == null) {
+                throw new IllegalStateException("Workflow parameterSchema is required: " + workflow.id());
+            }
             if (!ids.add(workflow.id())) {
                 throw new IllegalStateException("Duplicate managed workflow: " + workflow.id());
             }
@@ -194,6 +203,12 @@ public class SchedulerCatalogService {
             ManagedProject project,
             ManagedWorkflow workflow,
             ManagedNode node) {
+    }
+
+    public record ResolvedWorkflow(
+            ExecutionDefaults execution,
+            ManagedProject project,
+            ManagedWorkflow workflow) {
     }
 
     public record ResolvedTaskGroup(

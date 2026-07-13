@@ -15,7 +15,10 @@ public final class SchedulerDtos {
             List<String> endpoints) {
     }
 
-    public record RunRequest(String nodeId, Map<String, Object> params) {
+    public record RunRequest(String nodeId, String runManifestUri, String runManifestSha256) {
+    }
+
+    public record RunManifestRef(String runId, String uri, String sha256) {
     }
 
     public record RunResponse(

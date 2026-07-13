@@ -1,6 +1,7 @@
 package com.lanxinai.data.paltform.ducklake.scheduler.catalog;
 
 import java.util.List;
+import java.util.Map;
 
 public record SchedulerCatalog(
         int schemaVersion,
@@ -32,8 +33,9 @@ public record SchedulerCatalog(
             String id,
             String name,
             long code,
-            String taskIdParameter,
-            String paramsParameter,
+            String runManifestParameter,
+            String runManifestSha256Parameter,
+            Map<String, Map<String, Object>> parameterSchema,
             List<ManagedNode> nodes) {
     }
 

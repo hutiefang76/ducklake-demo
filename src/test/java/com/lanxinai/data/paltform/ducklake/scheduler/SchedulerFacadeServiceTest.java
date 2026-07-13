@@ -6,6 +6,7 @@ import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogSer
 import com.lanxinai.data.paltform.ducklake.scheduler.client.DolphinSchedulerClient;
 import com.lanxinai.data.paltform.ducklake.scheduler.config.SchedulerProperties;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRequest;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunManifestRef;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -67,8 +68,9 @@ class SchedulerFacadeServiceTest {
                         "id": "workflow-a",
                         "name": "Workflow A",
                         "code": 77,
-                        "taskIdParameter": "ETL_TASK_ID",
-                        "paramsParameter": "ETL_PARAMS_JSON",
+                        "runManifestParameter": "run_manifest_uri",
+                        "runManifestSha256Parameter": "run_manifest_sha256",
+                        "parameterSchema": {},
                         "nodes": [{
                           "id": "node-alpha",
                           "name": "Alpha",
@@ -81,8 +83,9 @@ class SchedulerFacadeServiceTest {
                         "id": "workflow-b",
                         "name": "Workflow B",
                         "code": 88,
-                        "taskIdParameter": "ETL_TASK_ID",
-                        "paramsParameter": "ETL_PARAMS_JSON",
+                        "runManifestParameter": "run_manifest_uri",
+                        "runManifestSha256Parameter": "run_manifest_sha256",
+                        "parameterSchema": {},
                         "nodes": [{
                           "id": "node-beta",
                           "name": "Beta",
@@ -126,7 +129,7 @@ class SchedulerFacadeServiceTest {
         var response = facade.startRun(
                 "project-a",
                 "workflow-b",
-                new RunRequest("node-beta", Map.of("batch", 7, "doctor", "张三")));
+                new RunRequest("node-beta", "s3://etl-runs/manifests/run-1.json", "abc123"));
 
         assertThat(response.workflowInstanceId()).isEqualTo(9001L);
         assertThat(response.taskId()).isEqualTo("ods_etl.beta");
@@ -142,9 +145,27 @@ class SchedulerFacadeServiceTest {
                 .containsEntry("failureStrategy", "CONTINUE")
                 .containsEntry("workflowInstancePriority", "HIGH");
         JsonNode startParams = mapper.readTree(form.get("startParams"));
-        assertThat(startParams.path("ETL_TASK_ID").asText()).isEqualTo("ods_etl.beta");
-        assertThat(mapper.readTree(startParams.path("ETL_PARAMS_JSON").asText()))
-                .isEqualTo(mapper.valueToTree(Map.of("batch", 7, "doctor", "张三")));
+        assertThat(startParams).hasSize(2);
+        assertThat(startParams.get(0).path("prop").asText()).isEqualTo("run_manifest_uri");
+        assertThat(startParams.get(0).path("value").asText())
+                .isEqualTo("s3://etl-runs/manifests/run-1.json");
+        assertThat(startParams.get(1).path("prop").asText()).isEqualTo("run_manifest_sha256");
+        assertThat(startParams.get(1).path("value").asText()).isEqualTo("abc123");
+    }
+
+    @Test
+    void startsWholeWorkflowWithoutStartNodeList() throws Exception {
+        enqueue("{\"code\":0,\"success\":true,\"data\":[9010]}");
+
+        var response = facade.startWorkflow(
+                "project-a", "workflow-b",
+                new RunManifestRef("run-10", "s3://etl-runs/manifests/run-10.json", "sha10"));
+
+        assertThat(response.workflowInstanceId()).isEqualTo(9010L);
+        assertThat(response.nodeId()).isNull();
+        Map<String, String> form = decodeForm(server.takeRequest().getBody().readUtf8());
+        assertThat(form).doesNotContainKey("startNodeList");
+        assertThat(mapper.readTree(form.get("startParams"))).hasSize(2);
     }
 
     @Test
@@ -152,7 +173,7 @@ class SchedulerFacadeServiceTest {
         assertThatThrownBy(() -> facade.startRun(
                 "project-a",
                 "missing-workflow",
-                new RunRequest("node-beta", Map.of())))
+                new RunRequest("node-beta", "s3://etl-runs/manifests/run-2.json", "abc456")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown managed workflow");
         assertThat(server.getRequestCount()).isZero();
@@ -169,7 +190,7 @@ class SchedulerFacadeServiceTest {
         facade.startRun(
                 "project-a",
                 "workflow-b",
-                new RunRequest("node-beta", Map.of()));
+                new RunRequest("node-beta", "s3://etl-runs/manifests/run-3.json", "abc789"));
 
         Map<String, String> form = decodeForm(server.takeRequest().getBody().readUtf8());
         assertThat(form)

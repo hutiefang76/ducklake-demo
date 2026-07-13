@@ -6,7 +6,7 @@
 - SeaweedFS S3 保存 DuckLake Parquet 数据文件；
 - Java 进程内嵌 DuckDB JDBC，加载 `httpfs`、`postgres`、`ducklake` extension；
 - 同一张测试表分别由原生 JDBC、Spring `JdbcTemplate`、MyBatis、JPA/Hibernate 操作。
-- 可选的 DolphinScheduler facade 按转换平台生成的逻辑目录调用任意受管 Project、Workflow 和 Node。
+- 可选的 ETL API 按转换平台生成的逻辑目录调用受管 Project、Workflow 和 Node，并将上传文件、运行清单及运行台账与业务代码解耦。
 
 包名按要求使用 `com.lanxinai.data.paltform.ducklake`。其中 `paltform` 保留了指定拼写。
 
@@ -168,12 +168,69 @@ Project、Workflow、Node 和 TaskGroup 均来自 catalog。Spring Boot 不固�
 catalog 还包含 tenant、WorkerGroup、失败策略和实例优先级等环境执行参数；应用在每次请求时重新加载，转换平台更新 catalog 后不需要修改 Java 代码或重启应用。
 
 - `GET /api/scheduler/catalog`：读取受管逻辑目录；
-- `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/runs`：执行指定逻辑 Node；
+- `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/runs`：使用已有 run manifest 执行完整 Workflow；
+- `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/nodes/{nodeId}/runs`：只执行指定逻辑 Node，用于诊断和补跑；
 - `GET /api/scheduler/projects/{projectId}/runs/{instanceId}/status|tasks|log`：状态、任务和日志；
 - `POST /api/scheduler/projects/{projectId}/runs/{instanceId}/stop`：停止实例；
 - `GET /api/scheduler/projects/{projectId}/task-groups/{taskGroupId}/queue`：TaskGroup 队列快照。
 
 队列接口明确返回 `exactPosition=false`。DolphinScheduler API 的列表顺序不能包装成权威执行名次。
+
+## ETL 业务 API
+
+启用 `ETL_PLATFORM_ENABLED=true` 后，应用使用独立的 SeaweedFS Bucket `dp-springboot-files`。默认 Prefix 为 `data-platform-dev/etl-platform/`：
+
+- `artifacts/yyyy/MM/dd/`：前端上传的 Excel、Parquet、CSV；
+- `run-manifests/yyyy/MM/dd/`：每次执行生成的不可变 JSON 参数清单。
+
+DuckLake 自身的数据文件仍使用 `s3://dp-ducklake/data-platform-dev/ducklake/`，两者不得混用。应用使用 S3 path-style 寻址；Bucket、Prefix、Endpoint、Region 均通过环境变量配置。
+
+### 上传文件
+
+下面的调用以流式方式上传，不把整个文件载入 JVM 内存。返回值包含 `artifactId`、`uri`、大小和 SHA-256：
+
+```powershell
+$artifact = Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8080/api/v1/etl/artifacts `
+  -Headers @{ 'X-Requested-By' = 'doctor' } `
+  -Form @{ file = Get-Item C:\data\material.parquet }
+```
+
+### 执行物料主数据 Workflow
+
+业务 API 只接收业务参数和 `artifactId`，不接收 DolphinScheduler numeric code，也不需要知道 Python 实现：
+
+```powershell
+$body = @{
+  artifactId = $artifact.artifactId
+  planId = 'plan-2026-07'
+  versionId = 'v1'
+  reason = 'manual validation'
+} | ConvertTo-Json
+
+$run = Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8080/api/v1/material-master/refresh `
+  -Headers @{ 'X-Requested-By' = 'doctor' } `
+  -ContentType application/json `
+  -Body $body
+```
+
+应用会依次完成：解析 artifact URI、按 catalog 的 `parameterSchema` 校验参数、上传 run manifest、写入 PostgreSQL `dp_etl_control` 数据库中的 `etl_control.etl_run`、启动完整 Workflow、记录 workflow instance ID。若提交被拒绝，台账状态会写为 `FAILED`。
+
+ETL 控制面数据库必须与 DuckLake catalog 隔离：`dp_etl_control` 保存 artifact/run 台账，`dp_ducklake` 只保存 DuckLake catalog。两者可以位于同一 PostgreSQL 实例，但不得把 `etl_control` schema 建在 `dp_ducklake` 中。
+
+### 执行任意受管 Workflow
+
+```powershell
+$body = @{ parameters = @{ some_parameter = 'value' }; reason = 'manual run' } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8080/api/v1/etl/projects/notebooks-etl/workflows/material.master_refresh/runs `
+  -Headers @{ 'X-Requested-By' = 'doctor' } `
+  -ContentType application/json `
+  -Body $body
+```
+
+逻辑 Project/Workflow 映射由转换平台 catalog 决定。物料业务入口的默认映射也可通过 `ETL_MATERIAL_PROJECT_ID` 和 `ETL_MATERIAL_WORKFLOW_ID` 覆盖。
 
 ## 构建
 

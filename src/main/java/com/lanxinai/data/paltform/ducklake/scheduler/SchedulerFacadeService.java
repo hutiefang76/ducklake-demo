@@ -4,12 +4,14 @@ import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalog;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogService;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogService.ResolvedRun;
 import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogService.ResolvedTaskGroup;
+import com.lanxinai.data.paltform.ducklake.scheduler.catalog.SchedulerCatalogService.ResolvedWorkflow;
 import com.lanxinai.data.paltform.ducklake.scheduler.client.DolphinSchedulerClient;
 import com.lanxinai.data.paltform.ducklake.scheduler.config.SchedulerProperties;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.OperationResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.QueueResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunLogResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRequest;
+import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunManifestRef;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunStatusResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunTasksResponse;
@@ -54,14 +56,24 @@ public class SchedulerFacadeService {
         return catalogService.load();
     }
 
+    public Map<String, Map<String, Object>> parameterSchema(String projectId, String workflowId) {
+        return Map.copyOf(catalogService.resolveWorkflow(projectId, workflowId).workflow().parameterSchema());
+    }
+
     public RunResponse startRun(String projectId, String workflowId, RunRequest request) {
         if (request == null || request.nodeId() == null || request.nodeId().isBlank()) {
             throw new IllegalArgumentException("nodeId is required");
         }
         ResolvedRun resolved = catalogService.resolveRun(projectId, workflowId, request.nodeId());
-        Map<String, Object> params = request.params() == null ? Map.of() : request.params();
         return client.startRun(
-                resolved.execution(), resolved.project(), resolved.workflow(), resolved.node(), params);
+                resolved.execution(), resolved.project(), resolved.workflow(), resolved.node(),
+                new RunManifestRef(null, request.runManifestUri(), request.runManifestSha256()));
+    }
+
+    public RunResponse startWorkflow(String projectId, String workflowId, RunManifestRef manifest) {
+        ResolvedWorkflow resolved = catalogService.resolveWorkflow(projectId, workflowId);
+        return client.startWorkflow(
+                resolved.execution(), resolved.project(), resolved.workflow(), manifest);
     }
 
     public RunStatusResponse status(String projectId, long instanceId) {
