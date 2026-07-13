@@ -10,6 +10,8 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -83,7 +85,9 @@ public class EtlLedgerRepository {
     public void attachWorkflowInstance(String runId, long workflowInstanceId) {
         initialize();
         String sql = "UPDATE " + schema() + ".etl_run "
-                + "SET workflow_instance_id=?, state='SUBMITTED', submitted_at=COALESCE(submitted_at, current_timestamp) "
+                + "SET workflow_instance_id=?, "
+                + "state_changed_at=CASE WHEN state<>'SUBMITTED' THEN current_timestamp ELSE state_changed_at END, "
+                + "state='SUBMITTED', submitted_at=COALESCE(submitted_at, current_timestamp) "
                 + "WHERE run_id=? AND (workflow_instance_id IS NULL OR workflow_instance_id=?)";
         try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, workflowInstanceId);
@@ -142,7 +146,10 @@ public class EtlLedgerRepository {
 
     public void markRunFailed(String runId, RuntimeException failure) {
         initialize();
-        String sql = "UPDATE " + schema() + ".etl_run SET state='FAILED', error_message=? WHERE run_id=?";
+        String sql = "UPDATE " + schema() + ".etl_run SET state='FAILED', error_message=?, "
+                + "state_changed_at=CASE WHEN state<>'FAILED' THEN current_timestamp ELSE state_changed_at END, "
+                + "last_reconciled_at=current_timestamp, finished_at=COALESCE(finished_at, current_timestamp) "
+                + "WHERE run_id=?";
         String message = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
         if (message.length() > 2000) message = message.substring(0, 2000);
         try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -151,6 +158,68 @@ public class EtlLedgerRepository {
             if (statement.executeUpdate() != 1) throw new IllegalStateException("ETL run ledger row is missing");
         } catch (SQLException exception) {
             throw new IllegalStateException("Unable to mark ETL run as failed", exception);
+        }
+    }
+
+    public RunStateRecord updateRunState(
+            String projectId,
+            long workflowInstanceId,
+            String schedulerState,
+            boolean terminal) {
+        initialize();
+        String state = com.lanxinai.data.paltform.ducklake.scheduler.SchedulerRunStates
+                .normalize(schedulerState);
+        String sql = "UPDATE " + schema() + ".etl_run SET "
+                + "state_changed_at=CASE WHEN state<>? THEN current_timestamp ELSE state_changed_at END, "
+                + "state=?, last_reconciled_at=current_timestamp, "
+                + "finished_at=CASE WHEN ? THEN COALESCE(finished_at, current_timestamp) ELSE finished_at END "
+                + "WHERE project_id=? AND workflow_instance_id=? "
+                + "RETURNING state, state_changed_at, last_reconciled_at, finished_at";
+        try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, state);
+            statement.setString(2, state);
+            statement.setBoolean(3, terminal);
+            statement.setString(4, projectId);
+            statement.setLong(5, workflowInstanceId);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) throw new IllegalStateException("ETL run ledger row is missing");
+                return new RunStateRecord(
+                        result.getString(1),
+                        result.getObject(2, OffsetDateTime.class).toInstant(),
+                        result.getObject(3, OffsetDateTime.class).toInstant(),
+                        optionalInstant(result, 4));
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to reconcile ETL run state", exception);
+        }
+    }
+
+    public List<ReconciliationCandidate> findReconciliationCandidates(int limit) {
+        initialize();
+        if (limit < 1 || limit > 1000) throw new IllegalArgumentException("Invalid reconciliation limit");
+        String terminals = String.join(",", java.util.Collections.nCopies(
+                com.lanxinai.data.paltform.ducklake.scheduler.SchedulerRunStates
+                        .terminalStates().size(), "?"));
+        String sql = "SELECT run_id, project_id, workflow_instance_id, state FROM " + schema()
+                + ".etl_run WHERE workflow_instance_id IS NOT NULL AND state NOT IN (" + terminals + ") "
+                + "ORDER BY COALESCE(last_reconciled_at, submitted_at, created_at), run_id LIMIT ?";
+        try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            int index = 1;
+            for (String terminal : com.lanxinai.data.paltform.ducklake.scheduler.SchedulerRunStates
+                    .terminalStates().stream().sorted().toList()) {
+                statement.setString(index++, terminal);
+            }
+            statement.setInt(index, limit);
+            try (ResultSet result = statement.executeQuery()) {
+                List<ReconciliationCandidate> candidates = new ArrayList<>();
+                while (result.next()) {
+                    candidates.add(new ReconciliationCandidate(
+                            result.getString(1), result.getString(2), result.getLong(3), result.getString(4)));
+                }
+                return List.copyOf(candidates);
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to list ETL runs for reconciliation", exception);
         }
     }
 
@@ -169,8 +238,17 @@ public class EtlLedgerRepository {
                         + "run_id VARCHAR(64) PRIMARY KEY, project_id VARCHAR(200) NOT NULL, workflow_id VARCHAR(200) NOT NULL,"
                         + "workflow_instance_id BIGINT, manifest_uri TEXT NOT NULL, manifest_sha256 CHAR(64) NOT NULL,"
                         + "requested_by VARCHAR(200) NOT NULL, state VARCHAR(50) NOT NULL, created_at TIMESTAMPTZ NOT NULL,"
-                        + "submitted_at TIMESTAMPTZ, error_message VARCHAR(2000))");
+                        + "submitted_at TIMESTAMPTZ, error_message VARCHAR(2000),"
+                        + "state_changed_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,"
+                        + "last_reconciled_at TIMESTAMPTZ, finished_at TIMESTAMPTZ)");
                 statement.execute("ALTER TABLE " + schema() + ".etl_run ADD COLUMN IF NOT EXISTS error_message VARCHAR(2000)");
+                statement.execute("ALTER TABLE " + schema() + ".etl_run ADD COLUMN IF NOT EXISTS state_changed_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp");
+                statement.execute("ALTER TABLE " + schema() + ".etl_run ADD COLUMN IF NOT EXISTS last_reconciled_at TIMESTAMPTZ");
+                statement.execute("ALTER TABLE " + schema() + ".etl_run ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ");
+                statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS etl_run_workflow_instance_uidx ON "
+                        + schema() + ".etl_run(project_id, workflow_instance_id) WHERE workflow_instance_id IS NOT NULL");
+                statement.execute("CREATE INDEX IF NOT EXISTS etl_run_reconciliation_idx ON "
+                        + schema() + ".etl_run(state, last_reconciled_at) WHERE workflow_instance_id IS NOT NULL");
                 initialized.set(true);
             } catch (SQLException exception) {
                 throw new IllegalStateException("Unable to initialize ETL PostgreSQL ledger", exception);
@@ -193,9 +271,20 @@ public class EtlLedgerRepository {
                 result.getString(5), result.getString(6), result.getString(7), result.getString(8));
     }
 
+    private static Instant optionalInstant(ResultSet result, int column) throws SQLException {
+        OffsetDateTime value = result.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
+    }
+
     public record ArtifactRecord(String artifactId, String uri, String originalName, String contentType,
                                  long size, String sha256, String requestedBy, Instant createdAt) {}
 
     public record RunRecord(String runId, String projectId, String workflowId, Long workflowInstanceId,
                             String manifestUri, String manifestSha256, String requestedBy, String state) {}
+
+    public record RunStateRecord(String state, Instant stateChangedAt, Instant lastReconciledAt,
+                                 Instant finishedAt) {}
+
+    public record ReconciliationCandidate(String runId, String projectId, long workflowInstanceId,
+                                          String state) {}
 }

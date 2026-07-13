@@ -17,6 +17,7 @@ import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRespon
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunStatusResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunTasksResponse;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.SchedulerMetaResponse;
+import com.lanxinai.data.paltform.ducklake.scheduler.SchedulerRunRegistry.RunStateMetadata;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -102,7 +103,13 @@ public class SchedulerFacadeService {
 
     public RunStatusResponse status(String projectId, long instanceId) {
         runRegistry.requireOwnedInstance(projectId, instanceId);
-        return client.runStatus(catalogService.project(projectId), instanceId);
+        RunStatusResponse status = client.runStatus(catalogService.project(projectId), instanceId);
+        RunStateMetadata metadata = runRegistry.recordStatus(projectId, instanceId, status.state());
+        return new RunStatusResponse(
+                status.projectId(), status.workflowInstanceId(), status.name(), status.state(),
+                status.submitTime(), status.startTime(), status.endTime(),
+                metadata.terminal(), metadata.attentionRequired(), metadata.attentionReason(),
+                metadata.stateChangedAt());
     }
 
     public RunTasksResponse tasks(String projectId, long instanceId) {

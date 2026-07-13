@@ -128,7 +128,11 @@ public class DolphinSchedulerClient {
                 data.path("state").asText("UNKNOWN"),
                 textOrNull(data, "submitTime"),
                 textOrNull(data, "startTime"),
-                textOrNull(data, "endTime"));
+                textOrNull(data, "endTime"),
+                false,
+                false,
+                null,
+                null);
     }
 
     public RunTasksResponse runTasks(ManagedProject project, long instanceId) {
@@ -185,7 +189,15 @@ public class DolphinSchedulerClient {
                 Map.of(
                         "workflowInstanceId", Long.toString(instanceId),
                         "executeType", "STOP"));
-        return new OperationResponse("STOP", project.id(), instanceId, true);
+        return new OperationResponse(
+                "STOP",
+                project.id(),
+                instanceId,
+                true,
+                "COMMAND_ACCEPTED",
+                true,
+                "/api/scheduler/projects/" + project.id() + "/runs/" + instanceId + "/status",
+                "DolphinScheduler accepted the command; poll status until terminal state");
     }
 
     public QueueResponse taskGroupQueue(

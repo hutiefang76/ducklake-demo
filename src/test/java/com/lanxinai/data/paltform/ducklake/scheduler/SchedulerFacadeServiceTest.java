@@ -7,6 +7,7 @@ import com.lanxinai.data.paltform.ducklake.scheduler.client.DolphinSchedulerClie
 import com.lanxinai.data.paltform.ducklake.scheduler.config.SchedulerProperties;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunRequest;
 import com.lanxinai.data.paltform.ducklake.scheduler.dto.SchedulerDtos.RunManifestRef;
+import com.lanxinai.data.paltform.ducklake.scheduler.SchedulerRunRegistry.RunStateMetadata;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -130,6 +131,11 @@ class SchedulerFacadeServiceTest {
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(RunManifestRef.class)))
                 .thenReturn("run-test");
+        when(runRegistry.recordStatus(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(new RunStateMetadata(false, false, null, "2026-07-14T00:00:00Z"));
         facade = new SchedulerFacadeService(properties, catalogService, client, runRegistry);
     }
 
@@ -306,11 +312,18 @@ class SchedulerFacadeServiceTest {
         enqueue("{\"code\":0,\"data\":{\"message\":\"hello from worker\"}}");
         enqueue("{\"code\":0,\"success\":true,\"data\":null}");
 
-        assertThat(facade.status("project-a", 9001).state()).isEqualTo("RUNNING_EXECUTION");
+        var status = facade.status("project-a", 9001);
+        assertThat(status.state()).isEqualTo("RUNNING_EXECUTION");
+        assertThat(status.terminal()).isFalse();
+        assertThat(status.attentionRequired()).isFalse();
         assertThat(facade.tasks("project-a", 9001).tasks()).hasSize(1);
         assertThat(facade.log("project-a", 9001, null, 0, 20000).message())
                 .isEqualTo("hello from worker");
-        assertThat(facade.stop("project-a", 9001).accepted()).isTrue();
+        var stopResponse = facade.stop("project-a", 9001);
+        assertThat(stopResponse.accepted()).isTrue();
+        assertThat(stopResponse.commandState()).isEqualTo("COMMAND_ACCEPTED");
+        assertThat(stopResponse.terminalStateRequiresPolling()).isTrue();
+        assertThat(stopResponse.statusEndpoint()).endsWith("/runs/9001/status");
 
         assertThat(server.takeRequest().getPath())
                 .isEqualTo("/dolphinscheduler/projects/42/workflow-instances/9001");

@@ -44,7 +44,11 @@ public final class SchedulerDtos {
             String state,
             String submitTime,
             String startTime,
-            String endTime) {
+            String endTime,
+            boolean terminal,
+            boolean attentionRequired,
+            String attentionReason,
+            String stateChangedAt) {
     }
 
     public record TaskInstanceSummary(
@@ -77,7 +81,11 @@ public final class SchedulerDtos {
             String operation,
             String projectId,
             long workflowInstanceId,
-            boolean accepted) {
+            boolean accepted,
+            String commandState,
+            boolean terminalStateRequiresPolling,
+            String statusEndpoint,
+            String warning) {
     }
 
     public record QueueItem(

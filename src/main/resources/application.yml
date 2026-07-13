@@ -87,6 +87,11 @@ etl-platform:
     username: ${ETL_LEDGER_USERNAME:}
     password: ${ETL_LEDGER_PASSWORD:}
     schema: ${ETL_LEDGER_SCHEMA:etl_control}
+  reconciliation:
+    enabled: ${ETL_RECONCILIATION_ENABLED:true}
+    fixed-delay: ${ETL_RECONCILIATION_FIXED_DELAY:30s}
+    ready-stop-stale-after: ${ETL_READY_STOP_STALE_AFTER:2m}
+    batch-size: ${ETL_RECONCILIATION_BATCH_SIZE:100}
   material-master:
     project-id: ${ETL_MATERIAL_PROJECT_ID:notebooks-etl}
     workflow-id: ${ETL_MATERIAL_WORKFLOW_ID:material.master_refresh}

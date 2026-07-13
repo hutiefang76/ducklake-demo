@@ -9,4 +9,13 @@ public interface SchedulerRunRegistry {
     void attachWorkflowInstance(String runId, long workflowInstanceId);
 
     void requireOwnedInstance(String projectId, long workflowInstanceId);
+
+    RunStateMetadata recordStatus(String projectId, long workflowInstanceId, String schedulerState);
+
+    record RunStateMetadata(
+            boolean terminal,
+            boolean attentionRequired,
+            String attentionReason,
+            String stateChangedAt) {
+    }
 }

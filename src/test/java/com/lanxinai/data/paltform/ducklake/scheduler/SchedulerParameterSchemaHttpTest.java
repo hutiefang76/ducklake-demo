@@ -150,6 +150,12 @@ class SchedulerParameterSchemaHttpTest {
                 public void requireOwnedInstance(String projectId, long workflowInstanceId) {
                     throw new SchedulerAuthorizationException("Not available in metadata-only test");
                 }
+
+                @Override
+                public RunStateMetadata recordStatus(
+                        String projectId, long workflowInstanceId, String schedulerState) {
+                    throw new SchedulerAuthorizationException("Not available in metadata-only test");
+                }
             };
         }
     }

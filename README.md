@@ -172,11 +172,13 @@ catalog 还包含 tenant、WorkerGroup、失败策略和实例优先级等环境
 - `GET /api/scheduler/projects/{projectId}/workflows/{workflowId}/parameter-schema`：原样返回版本化参数 schema 及其 canonical SHA-256；
 - `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/runs`：使用已有 run manifest 执行完整 Workflow；
 - `POST /api/scheduler/projects/{projectId}/workflows/{workflowId}/nodes/{nodeId}/runs`：只执行指定逻辑 Node，用于诊断和补跑；
-- `GET /api/scheduler/projects/{projectId}/runs/{instanceId}/status|tasks|log`：状态、任务和日志；
-- `POST /api/scheduler/projects/{projectId}/runs/{instanceId}/stop`：停止实例；
+- `GET /api/scheduler/projects/{projectId}/runs/{instanceId}/status|tasks|log`：状态、任务和日志；状态查询会把 DolphinScheduler 原始状态幂等回写到 ETL ledger，并返回 `terminal`、`attentionRequired` 和 `stateChangedAt`；
+- `POST /api/scheduler/projects/{projectId}/runs/{instanceId}/stop`：提交停止命令；`accepted=true` 只表示命令被 DolphinScheduler 接受，调用方必须按 `statusEndpoint` 继续轮询终态；
 - `GET /api/scheduler/projects/{projectId}/task-groups/{taskGroupId}/queue`：TaskGroup 队列快照。
 
 队列接口明确返回 `exactPosition=false`。DolphinScheduler API 的列表顺序不能包装成权威执行名次。
+
+ETL ledger 默认每 30 秒分批对账未终态实例，单个实例查询失败不会中断整批。`READY_STOP` 持续超过 2 分钟时，状态 API 返回 `attentionRequired=true`，提示运维检查 Master failover；该告警不会把原始 DolphinScheduler 状态改写成伪造的 `STOP`。对账开关、间隔、阈值和批量上限分别由 `ETL_RECONCILIATION_ENABLED`、`ETL_RECONCILIATION_FIXED_DELAY`、`ETL_READY_STOP_STALE_AFTER` 和 `ETL_RECONCILIATION_BATCH_SIZE` 配置。
 
 ## ETL 业务 API
 
