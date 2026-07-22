@@ -162,12 +162,31 @@
     await Promise.all([loadCurrent(), loadRuns()]);
     byId("script-panel").scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  function businessRun(run) {
+    if (!run) return null;
+    return {
+      run_id: run.run_id,
+      script_name: run.script_name,
+      state: run.state,
+      created_at: run.created_at,
+      started_at: run.started_at,
+      finished_at: run.finished_at
+    };
+  }
+
 
   async function loadCurrent() {
     if (!state.selectedScript) return;
     const query = new URLSearchParams({ script_id: state.selectedScript.script_id });
     const current = await api(`/runs/current?${query}`);
-    byId("current-run").textContent = pretty(current);
+    byId("current-run").textContent = pretty({
+      script_name: current.script_name,
+      queued_count: current.queued_count,
+      latest_run: businessRun(current.latest_run),
+      running_run: businessRun(current.running_run),
+      next_queued_run: businessRun(current.next_queued_run),
+      last_finished_run: businessRun(current.last_finished_run)
+    });
   }
 
   async function startRun() {
@@ -208,7 +227,7 @@
       const runCell = document.createElement("td");
       runCell.append(runLink);
       row.append(
-        text("td", entry.position ?? index + 1),
+        text("td", entry.queue?.position ?? index + 1),
         text("td", entry.script_name || entry.script_id),
         runCell,
         text("td", entry.state || entry.queue_state)
@@ -273,7 +292,7 @@
     fact(host, "创建", run.created_at);
     fact(host, "开始", run.started_at);
     fact(host, "完成", run.finished_at);
-    fact(host, "队列位置", queue.position ?? queue.queue_position ?? "—");
+    fact(host, "队列位置", queue.queue?.position ?? "—");
     const terminal = ["SUCCESS", "FAILED", "STOPPED", "CANCELLED"].includes(String(run.state).toUpperCase());
     byId("run-stop").disabled = terminal;
     byId("run-technical").textContent = pretty({ source: run.source, scheduler: run.scheduler, queue });

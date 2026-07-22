@@ -35,6 +35,9 @@ class BridgeConsoleAssetsTest {
 
         assertThat(html).contains("<details>", "调度 Workflow / Task 实例技术详情");
         assertThat(script).contains("scheduler: entry.scheduler", "scheduler: run.scheduler");
+        assertThat(script).contains("entry.queue?.position", "queue.queue?.position");
+        assertThat(script).contains("businessRun(current.latest_run)", "businessRun(current.running_run)");
+        assertThat(script).doesNotContain("pretty(current)");
         assertThat(script).contains("response.total ?? response.count");
     }
 
