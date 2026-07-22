@@ -1,0 +1,4 @@
+**
+!Dockerfile
+!target/
+!target/ducklake-demo-0.1.0-SNAPSHOT.jar

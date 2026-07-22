@@ -8,7 +8,6 @@ public class HomeController {
 
     @GetMapping("/")
     public String home() {
-        // 打开应用根地址时直接进入可交互的 API 文档。
-        return "redirect:/swagger-ui.html";
+        return "redirect:/etl-console.html";
     }
 }

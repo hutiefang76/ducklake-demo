@@ -6,6 +6,7 @@
 - SeaweedFS S3 保存 DuckLake Parquet 数据文件；
 - Java 进程内嵌 DuckDB JDBC，加载 `httpfs`、`postgres`、`ducklake` extension；
 - 同一张测试表分别由原生 JDBC、Spring `JdbcTemplate`、MyBatis、JPA/Hibernate 操作。
+- ETL 验收台只调用 Fresh Bridge v1，不直连或复制 DolphinScheduler 逻辑。
 
 包名按要求使用 `com.lanxinai.data.paltform.ducklake`。其中 `paltform` 保留了指定拼写。
 
@@ -16,6 +17,7 @@
 - DuckDB JDBC `1.5.4.0`（对应 DuckDB `1.5.4`）；
 - MyBatis Spring Boot Starter `4.0.0`；
 - springdoc-openapi `3.0.3`（Spring Boot 4 对应版本）；
+- Spring Boot `4.1` 的 Web JSON 类型统一使用 Jackson 3 `tools.jackson.*`，不得混入 `com.fasterxml.jackson.*`；`POST /api/bridge/runs` 的 MVC 测试负责防回归。
 - Hibernate 版本由 Spring Boot BOM 管理。
 
 JPA/Hibernate 使用 `PostgreSQLDialect` 生成基础 SQL，实际 JDBC 连接仍是 DuckDB。DuckLake 不支持数据库层 PRIMARY KEY，示例中的 `@Id` 是 Hibernate 实体标识，UUID 由应用生成，表本身不创建主键约束。
@@ -50,6 +52,17 @@ DataSource
 java -Dducklake.env.file=C:/secure/ducklake-demo.env -jar target/ducklake-demo-0.1.0-SNAPSHOT.jar
 ```
 
+ETL 验收台由服务端 BFF 持有 Bridge service token；浏览器无法读取 token 或 Bridge 内部地址：
+
+```text
+BRIDGE_ENABLED=true
+BRIDGE_BASE_URL=http://dp-notebook-dolphin-bridge:8080
+BRIDGE_SERVICE_TOKEN=<由 K8s Secret 注入>
+```
+
+这三个变量只配置 Bridge 连接；Workflow、Node、TaskGroup 和实例映射全部由 Bridge 管理。
+
+
 首次在新电脑使用时：
 
 ```powershell
@@ -76,7 +89,8 @@ mvn spring-boot:run
 
 应用启动后打开：
 
-- 首页（自动跳转 Swagger UI）：`http://127.0.0.1:8080/`；
+- 首页（自动跳转 ETL 验收台）：`http://127.0.0.1:8080/`；
+- ETL 验收台：`http://127.0.0.1:8080/etl-console.html`；
 - Swagger UI：`http://127.0.0.1:8080/swagger-ui.html`；
 - OpenAPI JSON：`http://127.0.0.1:8080/v3/api-docs`。
 
@@ -161,6 +175,7 @@ Invoke-RestMethod -Method Post "http://127.0.0.1:8080/api/ducklake/mybatis/scena
 
 ## 设计限制
 
+- ETL 验收台只允许扫描、脚本、执行、当前状态、队列、历史、日志和停止等 Bridge v1 业务路由；没有 DolphinScheduler client、任意代理或第二套状态机。
 - 这是连接与分层示例，不是高并发 OLTP 服务；Hikari pool 固定为 1，避免嵌入式 DuckDB 多连接壳和锁语义混乱。
 - 动态 DAO 类型采用枚举白名单；动态 catalog/schema/table 标识符经过校验。
 - 所有值参数使用 JDBC/MyBatis/JPA 参数绑定。

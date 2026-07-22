@@ -60,6 +60,15 @@ ducklake:
   install-extensions: ${DUCKLAKE_INSTALL_EXTENSIONS:true}
   maximum-pool-size: ${DUCKLAKE_POOL_SIZE:1}
 
+# 浏览器只访问本应用的 BFF。service token 仅由服务端环境变量或 K8s Secret 注入，
+# 不进入镜像、Git、HTML、JavaScript 或浏览器响应。
+bridge:
+  enabled: ${BRIDGE_ENABLED:false}
+  base-url: ${BRIDGE_BASE_URL:}
+  service-token: ${BRIDGE_SERVICE_TOKEN:}
+  connect-timeout: ${BRIDGE_CONNECT_TIMEOUT:5s}
+  request-timeout: ${BRIDGE_REQUEST_TIMEOUT:30s}
+
 logging:
   file:
     # 除控制台外同时保存本机日志，便于演示后追溯做了什么；*.log 已被 Git 忽略。

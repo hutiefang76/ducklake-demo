@@ -11,8 +11,8 @@ public class OpenApiConfiguration {
     @Bean
     public OpenAPI duckLakeDemoOpenApi() {
         return new OpenAPI().info(new Info()
-                .title("DuckLake Spring Boot Demo API")
+                .title("DuckLake Demo 与 ETL Bridge 验收 API")
                 .version("0.1.0")
-                .description("通过 JDBC、JdbcTemplate、MyBatis 和 JPA/Hibernate 操作同一张 DuckLake 测试表。"));
+                .description("DuckLake 数据访问示例，以及服务端持有 token 的 Fresh Bridge v1 最薄验收 BFF。"));
     }
 }
