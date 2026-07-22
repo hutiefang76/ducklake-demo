@@ -20,7 +20,10 @@
   <section class="card scan-card">
     <div class="section-title">
       <div><h2>源码扫描</h2><p>触发扫描并查看最近一次结果。</p></div>
-      <button id="scan-start" type="button">执行扫描</button>
+      <div class="actions">
+        <button id="scan-refresh" class="secondary" type="button">刷新状态</button>
+        <button id="scan-start" type="button">执行扫描</button>
+      </div>
     </div>
     <div id="scan-summary" class="facts"></div>
   </section>
@@ -109,6 +112,7 @@
       <div><h2 id="run-title">执行详情</h2><p id="run-business"></p></div>
       <div class="actions">
         <button id="run-log" class="secondary" type="button">查看终态日志</button>
+        <button id="run-refresh" class="secondary" type="button">刷新状态</button>
         <button id="run-stop" class="danger" type="button">停止执行</button>
       </div>
     </div>

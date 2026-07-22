@@ -13,8 +13,10 @@ class BridgeConsoleAssetsTest {
     void consoleUsesOnlyFreshBridgeBusinessRoutes() throws IOException {
         String html = resource("static/etl-console.html");
         String script = resource("static/bridge-console/app.js");
+        String legacyScript = resource("static/etl-console.js");
 
-        assertThat(html).contains("script_name", "script_id", "源码扫描", "全局队列", "执行历史", "停止执行");
+        assertThat(html).contains("script_name", "script_id", "源码扫描", "全局队列", "执行历史", "停止执行",
+                "scan-refresh", "run-refresh");
         assertThat(script).contains(
                 "api(\"/scans/latest\")",
                 "api(\"/scans\"",
@@ -22,10 +24,16 @@ class BridgeConsoleAssetsTest {
                 "api(`/runs/current?",
                 "api(\"/queue\")",
                 "/logs?limit=500",
-                "/stop`");
+                "/stop`",
+                "byId(\"scan-refresh\")",
+                "byId(\"run-refresh\")");
         assertThat(script).doesNotContain(
                 "/tasks", "task_key", "tsk_", "/uploads", "/timeline", "/diagnosis", "/lineage",
-                "Authorization", "service_token", "BRIDGE_SERVICE_TOKEN", "DolphinSchedulerClient");
+                "Authorization", "service_token", "BRIDGE_SERVICE_TOKEN", "DolphinSchedulerClient",
+                "http://60.", "https://60.", "/api/v1");
+        assertThat(legacyScript)
+                .contains("etl-console.html?v=20260722-bridge-v1", "window.location.replace")
+                .doesNotContain("/api/bridge", "/api/v1", "service_token");
     }
 
     @Test

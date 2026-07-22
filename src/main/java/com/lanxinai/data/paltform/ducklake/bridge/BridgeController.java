@@ -42,13 +42,44 @@ public class BridgeController {
     }
 
     @GetMapping("/status")
-    @Operation(summary = "查询 BFF 配置状态", description = "不返回 Bridge 地址或 service token。")
+    @Operation(summary = "查询验收链状态", description = "探测 fresh v1 脚本接口，不返回 Bridge 地址或 service token。")
     public Map<String, Object> status() {
+        boolean configured = properties.isConfigured();
+        if (!configured) {
+            return Map.of(
+                    "enabled", properties.isEnabled(),
+                    "configured", false,
+                    "service_ready", false,
+                    "acceptance_ready", false,
+                    "contract", "fresh-v1",
+                    "message", "Bridge 尚未配置");
+        }
+        BridgeClient.BridgeResponse probe = client.get("/api/v1/scripts?page=1&page_size=1");
+        boolean reachable = probe.status() >= 200 && probe.status() < 300;
+        JsonNode totalNode = probe.body() == null ? null : probe.body().get("total");
+        long scriptCount = totalNode != null && totalNode.isIntegralNumber()
+                ? totalNode.longValue() : -1L;
+        boolean serviceReady = reachable && scriptCount >= 0;
+        boolean acceptanceReady = serviceReady && scriptCount > 0;
         return Map.of(
                 "enabled", properties.isEnabled(),
-                "configured", properties.isConfigured(),
-                "contract", "fresh-v1");
+                "configured", true,
+                "service_ready", serviceReady,
+                "acceptance_ready", acceptanceReady,
+                "script_count", scriptCount,
+                "upstream_status", probe.status(),
+                "contract", "fresh-v1",
+                "message", statusMessage(reachable, serviceReady, acceptanceReady));
     }
+
+    @GetMapping("/readiness")
+    @Operation(summary = "查询验收链就绪状态", description = "fresh v1 脚本接口不可达时返回 HTTP 503。")
+    public ResponseEntity<Map<String, Object>> readiness() {
+        Map<String, Object> state = status();
+        boolean serviceReady = Boolean.TRUE.equals(state.get("service_ready"));
+        return ResponseEntity.status(serviceReady ? 200 : 503).body(state);
+    }
+
 
     @PostMapping("/scans")
     @Operation(summary = "触发源码扫描")
@@ -138,6 +169,19 @@ public class BridgeController {
     @Operation(summary = "查询某次执行的排队状态")
     public ResponseEntity<JsonNode> queueForRun(@PathVariable String runId) {
         return forward(client.get("/api/v1/queue/" + require(RUN_ID, runId, "run_id")));
+    }
+
+    private static String statusMessage(boolean reachable, boolean serviceReady, boolean acceptanceReady) {
+        if (!reachable) {
+            return "Bridge fresh v1 尚未切换到正式入口";
+        }
+        if (!serviceReady) {
+            return "Bridge fresh v1 返回了不兼容的脚本列表";
+        }
+        if (!acceptanceReady) {
+            return "Bridge 已连接，但尚无可验收脚本；请先执行正式扫描";
+        }
+        return "Bridge 验收链已就绪";
     }
 
     private ResponseEntity<JsonNode> forward(BridgeClient.BridgeResponse response) {

@@ -65,8 +65,9 @@
   async function loadStatus() {
     const status = await api("/status");
     const node = byId("bridge-status");
-    node.textContent = status.configured ? "Bridge 已连接" : "Bridge 未配置";
-    node.className = `badge${status.configured ? "" : " bad"}`;
+    const ready = status.acceptance_ready === true;
+    node.textContent = ready ? "Bridge 验收链已就绪" : (status.message || "Bridge 验收链不可用");
+    node.className = `badge${ready ? "" : " bad"}`;
   }
 
   async function loadLatestScan() {
@@ -325,6 +326,7 @@
 
   function bind() {
     byId("scan-start").addEventListener("click", safe(startScan));
+    byId("scan-refresh").addEventListener("click", safe(loadLatestScan));
     byId("scripts-refresh").addEventListener("click", safe(loadScripts));
     byId("script-filter").addEventListener("submit", (event) => {
       event.preventDefault(); state.scriptPage = 1; safe(loadScripts)();
@@ -337,6 +339,7 @@
     byId("runs-refresh").addEventListener("click", safe(loadRuns));
     byId("run-prev").addEventListener("click", () => { state.runPage--; safe(loadRuns)(); });
     byId("run-next").addEventListener("click", () => { state.runPage++; safe(loadRuns)(); });
+    byId("run-refresh").addEventListener("click", () => safe(() => selectRun(state.selectedRun?.run_id))());
     byId("run-log").addEventListener("click", safe(loadLogs));
     byId("run-stop").addEventListener("click", safe(stopRun));
   }

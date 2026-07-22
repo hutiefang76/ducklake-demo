@@ -37,12 +37,52 @@ class BridgeControllerTest {
 
     @Test
     void exposesSafeStatusWithoutConnectionOrCredential() throws Exception {
+        when(client.get("/api/v1/scripts?page=1&page_size=1")).thenReturn(new BridgeClient.BridgeResponse(200,
+                mapper.readTree("{\"items\":[{\"script_id\":\"fixture\"}],\"total\":1}")));
+
         mvc.perform(get("/api/bridge/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.configured").value(true))
+                .andExpect(jsonPath("$.service_ready").value(true))
+                .andExpect(jsonPath("$.acceptance_ready").value(true))
+                .andExpect(jsonPath("$.script_count").value(1))
+                .andExpect(jsonPath("$.upstream_status").value(200))
                 .andExpect(jsonPath("$.contract").value("fresh-v1"))
                 .andExpect(jsonPath("$.base_url").doesNotExist())
                 .andExpect(jsonPath("$.service_token").doesNotExist());
+        mvc.perform(get("/api/bridge/readiness"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void keepsUiReachableBeforeFirstScanWithoutClaimingAcceptanceReady() throws Exception {
+        when(client.get("/api/v1/scripts?page=1&page_size=1")).thenReturn(new BridgeClient.BridgeResponse(200,
+                mapper.readTree("{\"items\":[],\"total\":0}")));
+
+        mvc.perform(get("/api/bridge/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.service_ready").value(true))
+                .andExpect(jsonPath("$.acceptance_ready").value(false))
+                .andExpect(jsonPath("$.script_count").value(0));
+        mvc.perform(get("/api/bridge/readiness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.acceptance_ready").value(false));
+    }
+
+    @Test
+    void reportsFreshContractMismatchWithoutExposingUpstreamDetails() throws Exception {
+        when(client.get("/api/v1/scripts?page=1&page_size=1")).thenReturn(new BridgeClient.BridgeResponse(404,
+                mapper.readTree("{\"code\":\"NOT_FOUND\",\"internal\":\"must-not-leak\"}")));
+
+        mvc.perform(get("/api/bridge/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.configured").value(true))
+                .andExpect(jsonPath("$.service_ready").value(false))
+                .andExpect(jsonPath("$.acceptance_ready").value(false))
+                .andExpect(jsonPath("$.upstream_status").value(404))
+                .andExpect(jsonPath("$.internal").doesNotExist());
+        mvc.perform(get("/api/bridge/readiness"))
+                .andExpect(status().isServiceUnavailable());
     }
 
     @Test
