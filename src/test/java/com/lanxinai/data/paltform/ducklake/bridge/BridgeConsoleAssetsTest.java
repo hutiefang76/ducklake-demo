@@ -14,12 +14,14 @@ class BridgeConsoleAssetsTest {
         String html = resource("static/etl-console.html");
         String script = resource("static/bridge-console/app.js");
         String legacyScript = resource("static/etl-console.js");
+        String application = resource("application.yml");
 
         assertThat(html).contains("script_name", "script_id", "源码分支与扫描", "全局队列", "执行历史", "停止执行", "重试执行",
                 "scan-refresh", "run-refresh", "name=\"support_level\"", "name=\"runnable\"",
                 "id=\"scan-ref\"", "切换并扫描",
                 "类型 1 · 原生 Python", "类型 2 · 自动参数", "类型 3 · 完整 ETL 契约",
-                "Demo → Bridge → DolphinScheduler 调用证据");
+                "Demo → Bridge → DolphinScheduler 调用证据",
+                "上传输入文件", "run-file", "file-upload", "run-retry");
         assertThat(script).contains(
                 "api(\"/scans/options\")",
                 "api(\"/scans/latest\")",
@@ -28,10 +30,14 @@ class BridgeConsoleAssetsTest {
                 "api(`/scripts?",
                 "api(`/runs/current?",
                 "api(\"/queue\")",
+                "api(\"/files\"",
+                "api(`/files/${",
                 "/logs?limit=500",
                 "/stop`",
                 "/retry`",
                 "byId(\"run-retry\")",
+                "new FormData()",
+                "file_ids: fileIds",
                 "byId(\"scan-refresh\")",
                 "byId(\"run-refresh\")");
         assertThat(script).contains(
@@ -58,9 +64,12 @@ class BridgeConsoleAssetsTest {
                 "state.executionEvidence.run_id !== run.run_id");
         assertThat(html).doesNotContain("<textarea id=\"run-parameters\"");
         assertThat(script).doesNotContain(
-                "/tasks", "task_key", "tsk_", "/uploads", "/timeline", "/diagnosis", "/lineage",
+                "/tasks", "task_key", "tsk_", "/uploads", "/timeline", "/diagnosis", "/lineage", "file_ids: []",
                 "Authorization", "service_token", "BRIDGE_SERVICE_TOKEN", "DolphinSchedulerClient",
                 "http://60.", "https://60.");
+        assertThat(application).contains(
+                "max-file-size: ${BRIDGE_UPLOAD_MAX_SIZE:100MB}",
+                "max-request-size: ${BRIDGE_UPLOAD_MAX_SIZE:100MB}");
         assertThat(legacyScript)
                 .contains("etl-console.html?v=20260722-bridge-v1", "window.location.replace")
                 .doesNotContain("/api/bridge", "/api/v1", "service_token");

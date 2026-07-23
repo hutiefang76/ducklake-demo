@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -71,6 +72,49 @@ class BridgeClientTest {
         assertThat(response.status()).isEqualTo(202);
         assertThat(body.get()).contains("script_id").doesNotContain("Authorization");
         assertThat(idempotency.get()).isEqualTo("fixture-request-key");
+    }
+
+    @Test
+    void streamsMultipartUploadWithCredentialOnlyOnServerSide() throws Exception {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> contentType = new AtomicReference<>();
+        AtomicReference<String> method = new AtomicReference<>();
+        AtomicReference<byte[]> body = new AtomicReference<>();
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/bridge/api/v1/files", exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            contentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
+            method.set(exchange.getRequestMethod());
+            body.set(exchange.getRequestBody().readAllBytes());
+            respond(exchange, 201,
+                    "{\"file_id\":\"fil_01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"status\":\"AVAILABLE\"}",
+                    "application/json");
+        });
+        server.start();
+
+        String credential = "fixture-upload-credential";
+        BridgeClient client = new BridgeClient(configured(server, credential),
+                new ObjectMapper(), HttpClient.newHttpClient());
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "input_excel.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "xlsx-fixture-content".getBytes(StandardCharsets.UTF_8));
+
+        BridgeClient.BridgeResponse response = client.upload("/api/v1/files", file);
+
+        String multipart = new String(body.get(), StandardCharsets.UTF_8);
+        assertThat(response.status()).isEqualTo(201);
+        assertThat(response.body().path("file_id").asText())
+                .isEqualTo("fil_01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assertThat(method.get()).isEqualTo("POST");
+        assertThat(contentType.get()).startsWith("multipart/form-data; boundary=");
+        assertThat(authorization.get()).isEqualTo("Bearer " + credential);
+        assertThat(multipart)
+                .contains("name=\"file\"")
+                .contains("filename=\"input_excel.xlsx\"")
+                .contains("xlsx-fixture-content")
+                .doesNotContain(credential);
+        assertThat(response.body().toString()).doesNotContain(credential);
     }
 
     @Test

@@ -4,8 +4,10 @@ import tools.jackson.databind.ObjectMapper;
 import com.lanxinai.data.paltform.ducklake.controller.ApiExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.multipart.MultipartFile;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -15,6 +17,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -132,17 +135,48 @@ class BridgeControllerTest {
         mvc.perform(get("/api/bridge/scripts").param("task_key", "legacy"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void forwardsMultipartUploadAndFileStatusWithoutReturningCredential() throws Exception {
+        String fileId = "fil_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+        when(client.upload(eq("/api/v1/files"), any(MultipartFile.class)))
+                .thenReturn(new BridgeClient.BridgeResponse(201,
+                        mapper.readTree("{\"file_id\":\"" + fileId
+                                + "\",\"original_name\":\"input_excel.xlsx\",\"status\":\"AVAILABLE\"}")));
+        when(client.get("/api/v1/files/" + fileId))
+                .thenReturn(new BridgeClient.BridgeResponse(200,
+                        mapper.readTree("{\"file_id\":\"" + fileId
+                                + "\",\"original_name\":\"input_excel.xlsx\",\"status\":\"AVAILABLE\"}")));
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "input_excel.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "xlsx-fixture-content".getBytes());
+
+        mvc.perform(multipart("/api/bridge/files").file(file))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.file_id").value(fileId))
+                .andExpect(jsonPath("$.status").value("AVAILABLE"))
+                .andExpect(jsonPath("$.service_token").doesNotExist());
+        mvc.perform(get("/api/bridge/files/" + fileId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.file_id").value(fileId));
+
+        verify(client).upload(eq("/api/v1/files"), any(MultipartFile.class));
+        verify(client).get("/api/v1/files/" + fileId);
+    }
     // 必须经 Spring MVC 真实反序列化 POST JSON，防止 Jackson 2/3 类型混用再次变成 500。
 
     @Test
-    void forwardsRunCreationStopQueueAndLogs() throws Exception {
+    void forwardsRunCreationWithFilesStopRetryQueueAndLogs() throws Exception {
         when(client.post(anyString(), any(), any())).thenReturn(new BridgeClient.BridgeResponse(202,
                 mapper.readTree("{\"run_id\":\"run_01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"state\":\"QUEUED\"}")));
         when(client.get(anyString())).thenReturn(new BridgeClient.BridgeResponse(200, mapper.createObjectNode()));
 
         mvc.perform(post("/api/bridge/runs")
+                        .header("Idempotency-Key", "run-with-file")
                         .contentType("application/json")
-                        .content("{\"script_id\":\"scr_orders_0123456789abcdfg\",\"parameters\":{}}"))
+                        .content("{\"script_id\":\"scr_orders_0123456789abcdfg\",\"parameters\":{},"
+                                + "\"file_ids\":[\"fil_01ARZ3NDEKTSV4RRFFQ69G5FAV\"]}"))
                 .andExpect(status().isAccepted());
         mvc.perform(post("/api/bridge/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/stop")
                         .contentType("application/json")
@@ -157,5 +191,11 @@ class BridgeControllerTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/bridge/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/logs").param("limit", "500"))
                 .andExpect(status().isOk());
+
+        verify(client).post(eq("/api/v1/runs"),
+                org.mockito.ArgumentMatchers.argThat(body -> body.path("file_ids").size() == 1
+                        && body.path("file_ids").get(0).asText()
+                        .equals("fil_01ARZ3NDEKTSV4RRFFQ69G5FAV")),
+                eq("run-with-file"));
     }
 }

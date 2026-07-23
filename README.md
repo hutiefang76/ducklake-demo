@@ -6,7 +6,7 @@
 - SeaweedFS S3 保存 DuckLake Parquet 数据文件；
 - Java 进程内嵌 DuckDB JDBC，加载 `httpfs`、`postgres`、`ducklake` extension；
 - 同一张测试表分别由原生 JDBC、Spring `JdbcTemplate`、MyBatis、JPA/Hibernate 操作。
-- ETL 验收台只调用 Fresh Bridge v1，不直连或复制 DolphinScheduler 逻辑。
+- ETL 验收台只调用 Fresh Bridge v1，支持契约单文件上传、执行、停止和重试，不直连或复制 DolphinScheduler 逻辑。
 
 包名按要求使用 `com.lanxinai.data.paltform.ducklake`。其中 `paltform` 保留了指定拼写。
 
@@ -61,6 +61,9 @@ BRIDGE_SERVICE_TOKEN=<由 K8s Secret 注入>
 ```
 
 这三个变量只配置 Bridge 连接；Workflow、Node、TaskGroup 和实例映射全部由 Bridge 管理。
+浏览器上传通过同源 `POST /api/bridge/files` 进入服务端 BFF，再由 BFF 携带 service token 转发到
+Bridge；浏览器请求、HTML、JavaScript 和响应中都不包含该 token。默认单文件与请求上限均为
+`100MB`，可以通过 `BRIDGE_UPLOAD_MAX_SIZE` 下调。
 
 ETL 验收台将 Bridge 脚本按统一三层能力展示：
 
@@ -183,7 +186,7 @@ Invoke-RestMethod -Method Post "http://127.0.0.1:8080/api/ducklake/mybatis/scena
 
 ## 设计限制
 
-- ETL 验收台只允许扫描、脚本、执行、当前状态、队列、历史、日志和停止等 Bridge v1 业务路由；没有 DolphinScheduler client、任意代理或第二套状态机。
+- ETL 验收台只允许扫描、脚本、文件上传/状态、执行、当前状态、队列、历史、日志、停止和重试等 Bridge v1 业务路由；没有 DolphinScheduler client、任意代理或第二套状态机。
 - 这是连接与分层示例，不是高并发 OLTP 服务；Hikari pool 固定为 1，避免嵌入式 DuckDB 多连接壳和锁语义混乱。
 - 动态 DAO 类型采用枚举白名单；动态 catalog/schema/table 标识符经过校验。
 - 所有值参数使用 JDBC/MyBatis/JPA 参数绑定。

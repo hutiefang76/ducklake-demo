@@ -81,7 +81,15 @@
         <h3>执行脚本</h3>
         <p id="parameter-source" class="hint">选择脚本后自动读取契约默认参数。</p>
         <label>自动参数<pre id="run-parameters">{}</pre></label>
-        <button id="run-start" type="button">使用自动参数执行</button>
+        <div id="run-file-panel" class="file-upload hidden">
+          <label>契约输入文件<input id="run-file" type="file" disabled></label>
+          <p id="run-file-hint" class="muted-text">选择脚本后读取文件契约。</p>
+          <div class="actions">
+            <button id="file-upload" class="secondary" type="button" disabled>上传输入文件</button>
+            <span id="run-file-status" class="file-status">尚未上传</span>
+          </div>
+        </div>
+        <button id="run-start" type="button" disabled>使用自动参数执行</button>
       </div>
       <div>
         <h3>当前状态</h3>

@@ -29,6 +29,10 @@ label { color: var(--muted); font-size: 13px; display: grid; gap: 5px; }
 label.check { display: flex; align-items: center; padding-bottom: 10px; }
 input, textarea, select { border: 1px solid #b9c6d8; border-radius: 7px; padding: 9px 10px; min-width: 180px; font: inherit; color: var(--ink); background: white; }
 textarea { width: 100%; resize: vertical; font-family: Consolas, monospace; }
+.file-upload { margin: 14px 0; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: #f8fafc; }
+.file-upload input { width: 100%; }
+.muted-text, .file-status { color: var(--muted); font-size: 13px; }
+.muted-text { margin: 8px 0; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { border-bottom: 1px solid var(--line); padding: 11px 9px; text-align: left; vertical-align: top; }

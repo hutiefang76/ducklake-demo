@@ -3,6 +3,7 @@ package com.lanxinai.data.paltform.ducklake.bridge;
 import tools.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,8 +12,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Map;
@@ -32,6 +35,7 @@ public class BridgeController {
     private static final Set<String> CURRENT_QUERY = Set.of("script_name", "script_id");
     private static final Pattern SCRIPT_ID = Pattern.compile("scr_[a-z0-9-]+_[0-9a-hjkmnp-tv-z]{16}");
     private static final Pattern RUN_ID = Pattern.compile("run_[0-9A-HJKMNP-TV-Z]{26}");
+    private static final Pattern FILE_ID = Pattern.compile("fil_[0-9A-HJKMNP-TV-Z]{26}");
 
     private final BridgeClient client;
     private final BridgeProperties properties;
@@ -118,6 +122,21 @@ public class BridgeController {
     @Operation(summary = "按 script_id 查询脚本详情")
     public ResponseEntity<JsonNode> script(@PathVariable String scriptId) {
         return forward(client.get("/api/v1/scripts/" + require(SCRIPT_ID, scriptId, "script_id")));
+    }
+
+    @PostMapping(value = "/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "上传脚本输入文件")
+    public ResponseEntity<JsonNode> uploadFile(@RequestPart("file") MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("file must not be empty");
+        }
+        return forward(client.upload("/api/v1/files", file));
+    }
+
+    @GetMapping("/files/{fileId}")
+    @Operation(summary = "查询输入文件状态")
+    public ResponseEntity<JsonNode> file(@PathVariable String fileId) {
+        return forward(client.get("/api/v1/files/" + require(FILE_ID, fileId, "file_id")));
     }
 
     @PostMapping("/runs")

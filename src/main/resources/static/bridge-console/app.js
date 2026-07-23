@@ -12,7 +12,9 @@
     runPages: 1,
     selectedScript: null,
     selectedRun: null,
-    executionEvidence: null
+    executionEvidence: null,
+    fileContracts: [],
+    uploadedFile: null
   };
 
   const byId = (id) => document.getElementById(id);
@@ -89,10 +91,14 @@
   }
 
   async function api(path, options = {}) {
+    const headers = new Headers(options.headers || {});
+    if (options.body !== undefined && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
     const response = await fetch(`${apiRoot}${path}`, {
+      ...options,
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-      ...options
+      headers
     });
     const body = await response.json().catch(() => ({ code: "INVALID_JSON", message: "服务返回了非 JSON 内容" }));
     if (!response.ok) throw new Error(body.message || body.error || `${response.status} ${response.statusText}`);
@@ -235,12 +241,13 @@
     const automatic = automaticParameters(entry);
     byId("run-parameters").textContent = pretty(automatic.values);
     byId("parameter-source").textContent = automatic.source;
-    byId("run-start").disabled = !entry.runnable || automatic.missing.length > 0;
     state.executionEvidence = null;
     byId("execution-evidence").textContent = "尚未执行";
+    configureFileInput(entry);
     byId("script-technical").textContent = pretty({
       contract: entry.contract,
       parameters: entry.parameters,
+      files: state.fileContracts,
       inputs: entry.inputs,
       outputs: entry.outputs,
       scheduler: entry.scheduler,
@@ -249,6 +256,100 @@
     await Promise.all([loadCurrent(), loadRuns()]);
     byId("script-panel").scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  function scriptFiles(entry) {
+    if (Array.isArray(entry?.files)) return entry.files;
+    if (Array.isArray(entry?.contract?.files)) return entry.contract.files;
+    return [];
+  }
+
+  function usableFile(file) {
+    return file && ["AVAILABLE", "READY"].includes(String(file.status || "").toUpperCase());
+  }
+
+  function updateRunEnabled() {
+    const input = byId("run-file");
+    const selected = Boolean(input?.files?.length);
+    const singleContract = state.fileContracts.length === 1;
+    const required = singleContract && state.fileContracts[0].required !== false;
+    const fileReady = state.fileContracts.length === 0
+      || (singleContract && (usableFile(state.uploadedFile) || (!required && !selected)));
+    const automatic = automaticParameters(state.selectedScript);
+    byId("run-start").disabled = !state.selectedScript?.runnable
+      || automatic.missing.length > 0
+      || !fileReady;
+  }
+
+  function configureFileInput(entry) {
+    state.fileContracts = scriptFiles(entry);
+    state.uploadedFile = null;
+    const panel = byId("run-file-panel");
+    const input = byId("run-file");
+    const upload = byId("file-upload");
+    const hint = byId("run-file-hint");
+    const status = byId("run-file-status");
+    input.value = "";
+    status.textContent = "尚未上传";
+    panel.classList.toggle("hidden", state.fileContracts.length === 0);
+    if (state.fileContracts.length === 0) {
+      input.disabled = true;
+      upload.disabled = true;
+      updateRunEnabled();
+      return;
+    }
+    if (state.fileContracts.length !== 1) {
+      input.disabled = true;
+      upload.disabled = true;
+      hint.textContent = `当前验收台仅支持单文件契约；此脚本声明了 ${state.fileContracts.length} 个文件。`;
+      status.textContent = "暂不支持从页面执行";
+      updateRunEnabled();
+      return;
+    }
+    const contract = state.fileContracts[0];
+    const extensions = Array.isArray(contract.extensions) ? contract.extensions : [];
+    const contentTypes = Array.isArray(contract.content_types) ? contract.content_types : [];
+    input.disabled = false;
+    input.accept = [...extensions, ...contentTypes].join(",");
+    upload.disabled = true;
+    hint.textContent = `${contract.name || "input_file"} · ${contract.required === false ? "可选" : "必填"}`
+      + `${extensions.length ? ` · ${extensions.join(" / ")}` : ""}`;
+    updateRunEnabled();
+  }
+
+  function resetSelectedFile() {
+    state.uploadedFile = null;
+    byId("run-file-status").textContent = byId("run-file").files.length ? "待上传" : "尚未选择文件";
+    byId("file-upload").disabled = byId("run-file").files.length !== 1;
+    updateRunEnabled();
+  }
+
+  async function uploadFile() {
+    const input = byId("run-file");
+    if (state.fileContracts.length !== 1 || input.files.length !== 1) {
+      throw new Error("请选择契约要求的单个输入文件");
+    }
+    const form = new FormData();
+    form.append("file", input.files[0], input.files[0].name);
+    byId("file-upload").disabled = true;
+    byId("run-file-status").textContent = "正在上传…";
+    try {
+      const uploaded = await api("/files", { method: "POST", body: form });
+      if (!uploaded.file_id) throw new Error("Bridge 未返回 file_id");
+      const confirmed = await api(`/files/${encodeURIComponent(uploaded.file_id)}`);
+      state.uploadedFile = confirmed;
+      byId("run-file-status").textContent = `${confirmed.original_name || input.files[0].name} · `
+        + `${confirmed.file_id} · ${confirmed.status || "UNKNOWN"}`;
+      updateRunEnabled();
+      message(`文件已上传：${confirmed.file_id}`);
+    } catch (error) {
+      state.uploadedFile = null;
+      byId("run-file-status").textContent = "上传失败，可重新提交";
+      byId("file-upload").disabled = false;
+      updateRunEnabled();
+      throw error;
+    }
+  }
+
   function businessRun(run) {
     if (!run) return null;
     return {
@@ -282,10 +383,15 @@
     if (automatic.missing.length) {
       throw new Error(`契约缺少必填默认值：${automatic.missing.join(", ")}`);
     }
+    updateRunEnabled();
+    if (byId("run-start").disabled) {
+      throw new Error("请先上传脚本契约要求的输入文件");
+    }
+    const fileIds = usableFile(state.uploadedFile) ? [state.uploadedFile.file_id] : [];
     const requestBody = {
       script_id: state.selectedScript.script_id,
       parameters: automatic.values,
-      file_ids: []
+      file_ids: fileIds
     };
     const demoApiUrl = new URL(`${apiRoot}/runs`, window.location.href).href;
     state.executionEvidence = {
@@ -520,6 +626,8 @@
     byId("script-prev").addEventListener("click", () => { state.scriptPage--; safe(loadScripts)(); });
     byId("script-next").addEventListener("click", () => { state.scriptPage++; safe(loadScripts)(); });
     byId("current-refresh").addEventListener("click", safe(loadCurrent));
+    byId("run-file").addEventListener("change", resetSelectedFile);
+    byId("file-upload").addEventListener("click", safe(uploadFile));
     byId("run-start").addEventListener("click", safe(startRun));
     byId("queue-refresh").addEventListener("click", safe(loadQueue));
     byId("runs-refresh").addEventListener("click", safe(loadRuns));
