@@ -11,7 +11,7 @@
   <div>
     <p class="eyebrow">DuckLake Demo</p>
     <h1>ETL Bridge 验收台</h1>
-    <p>按业务脚本扫描、查询、执行和查看全局队列；调度器技术对象只在折叠详情中展示。</p>
+    <p>统一验收类型 1 原生 Python、类型 2 参数化和类型 3 完整 ETL 契约；所有操作只调用 notebook-dolphin-bridge。</p>
   </div>
   <span id="bridge-status" class="badge muted">正在检查 Bridge</span>
 </header>
@@ -36,12 +36,27 @@
     <form id="script-filter" class="toolbar">
       <label>名称或路径<input name="q" autocomplete="off" placeholder="mdm_etl/material"></label>
       <label>目录<input name="folder_prefix" autocomplete="off" placeholder="mdm_etl"></label>
+      <label>支持类型
+        <select name="support_level">
+          <option value="">全部类型</option>
+          <option value="PYTHON_ONLY">类型 1 · 原生 Python</option>
+          <option value="PARAMETERIZED">类型 2 · 自动参数</option>
+          <option value="FULL">类型 3 · 完整 ETL 契约</option>
+        </select>
+      </label>
+      <label>是否可执行
+        <select name="runnable">
+          <option value="">全部</option>
+          <option value="true">可执行</option>
+          <option value="false">不可执行</option>
+        </select>
+      </label>
       <label class="check"><input name="recursive" type="checkbox" checked> 包含子目录</label>
       <button type="submit">查询</button>
     </form>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>业务脚本</th><th>短 ID</th><th>支持级别</th><th>可执行</th><th></th></tr></thead>
+        <thead><tr><th>业务脚本</th><th>短 ID</th><th>支持类型</th><th>可执行</th><th></th></tr></thead>
         <tbody id="script-rows"></tbody>
       </table>
     </div>
@@ -61,8 +76,9 @@
     <div class="split">
       <div>
         <h3>执行脚本</h3>
-        <label>参数 JSON<textarea id="run-parameters" rows="7">{}</textarea></label>
-        <button id="run-start" type="button">提交执行</button>
+        <p id="parameter-source" class="hint">选择脚本后自动读取契约默认参数。</p>
+        <label>自动参数<pre id="run-parameters">{}</pre></label>
+        <button id="run-start" type="button">使用自动参数执行</button>
       </div>
       <div>
         <h3>当前状态</h3>
@@ -73,6 +89,11 @@
       <summary>契约、输入输出与调度技术详情</summary>
       <pre id="script-technical"></pre>
     </details>
+    <div class="evidence">
+      <h3>Demo → Bridge → DolphinScheduler 调用证据</h3>
+      <p class="hint">Demo 不直连 DolphinScheduler；调度对象和实例结果来自 Bridge 的执行查询响应。</p>
+      <pre id="execution-evidence">尚未执行</pre>
+    </div>
   </section>
 
   <section class="card">

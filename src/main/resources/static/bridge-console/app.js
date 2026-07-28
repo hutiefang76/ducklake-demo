@@ -11,7 +11,8 @@
     runPage: 1,
     runPages: 1,
     selectedScript: null,
-    selectedRun: null
+    selectedRun: null,
+    executionEvidence: null
   };
 
   const byId = (id) => document.getElementById(id);
@@ -23,6 +24,43 @@
   };
   const pretty = (value) => JSON.stringify(value ?? {}, null, 2);
   const items = (value) => Array.isArray(value?.items) ? value.items : [];
+  const hasOwn = (value, name) => Object.prototype.hasOwnProperty.call(value || {}, name);
+
+  function supportType(level) {
+    return {
+      PYTHON_ONLY: "类型 1 · 原生 Python",
+      PARAMETERIZED: "类型 2 · 自动参数",
+      FULL: "类型 3 · 完整 ETL 契约"
+    }[String(level || "").toUpperCase()] || `未知类型 · ${level || "—"}`;
+  }
+
+  function automaticParameters(entry) {
+    if (String(entry?.support_level).toUpperCase() === "PYTHON_ONLY") {
+      return { values: {}, missing: [], source: "类型 1 固定无参数，直接执行原始脚本" };
+    }
+    const specs = Array.isArray(entry?.parameters)
+      ? entry.parameters
+      : (Array.isArray(entry?.contract?.parameters) ? entry.contract.parameters : []);
+    const values = {};
+    const missing = [];
+    specs.forEach((spec) => {
+      if (!spec?.name) return;
+      if (hasOwn(spec, "default")) {
+        values[spec.name] = spec.default;
+      } else if (Array.isArray(spec.allowed_values) && spec.allowed_values.length > 0) {
+        values[spec.name] = spec.allowed_values[0];
+      } else if (spec.required) {
+        missing.push(spec.name);
+      }
+    });
+    return {
+      values,
+      missing,
+      source: missing.length
+        ? `契约缺少必填默认值：${missing.join(", ")}`
+        : "参数由 Bridge 脚本契约的 default / allowed_values 自动生成"
+    };
+  }
 
   function message(value, error = false) {
     const node = byId("message");
@@ -98,8 +136,12 @@
     const query = new URLSearchParams({ page: String(state.scriptPage), page_size: "25" });
     const q = String(form.get("q") || "").trim();
     const folder = String(form.get("folder_prefix") || "").trim();
+    const supportLevel = String(form.get("support_level") || "").trim();
+    const runnable = String(form.get("runnable") || "").trim();
     if (q) query.set("q", q);
     if (folder) query.set("folder_prefix", folder);
+    if (supportLevel) query.set("support_level", supportLevel);
+    if (runnable) query.set("runnable", runnable);
     query.set("recursive", form.get("recursive") ? "true" : "false");
     return query;
   }
@@ -123,7 +165,7 @@
       row.append(
         text("td", entry.script_name),
         text("td", entry.script_id),
-        text("td", entry.support_level || entry.contract_status),
+        text("td", `${supportType(entry.support_level)} (${entry.support_level || "—"})`),
         text("td", entry.runnable ? "是" : "否"),
         actions
       );
@@ -149,9 +191,14 @@
     fact(host, "源码", entry.source_path);
     fact(host, "格式", entry.source_format);
     fact(host, "契约", entry.contract_status);
-    fact(host, "支持级别", entry.support_level);
+    fact(host, "支持类型", supportType(entry.support_level));
     fact(host, "可执行", entry.runnable ? "是" : "否");
-    byId("run-start").disabled = !entry.runnable;
+    const automatic = automaticParameters(entry);
+    byId("run-parameters").textContent = pretty(automatic.values);
+    byId("parameter-source").textContent = automatic.source;
+    byId("run-start").disabled = !entry.runnable || automatic.missing.length > 0;
+    state.executionEvidence = null;
+    byId("execution-evidence").textContent = "尚未执行";
     byId("script-technical").textContent = pretty({
       contract: entry.contract,
       parameters: entry.parameters,
@@ -192,13 +239,40 @@
 
   async function startRun() {
     if (!state.selectedScript) throw new Error("请先选择业务脚本");
-    let parameters;
-    try { parameters = JSON.parse(byId("run-parameters").value || "{}"); }
-    catch { throw new Error("参数必须是合法 JSON"); }
+    const automatic = automaticParameters(state.selectedScript);
+    if (automatic.missing.length) {
+      throw new Error(`契约缺少必填默认值：${automatic.missing.join(", ")}`);
+    }
+    const requestBody = {
+      script_id: state.selectedScript.script_id,
+      parameters: automatic.values,
+      file_ids: []
+    };
+    const demoApiUrl = new URL(`${apiRoot}/runs`, window.location.href).href;
+    state.executionEvidence = {
+      run_id: null,
+      chain: "Demo -> notebook-dolphin-bridge -> DolphinScheduler -> original script",
+      demo_api: { method: "POST", url: demoApiUrl },
+      bridge_api: {
+        method: "POST",
+        public_path: "/data-platform/notebook-dolphin-bridge/api/v1/runs",
+        upstream_path: "/api/v1/runs",
+        called_by: "DuckLake Demo server-side BFF"
+      },
+      dolphinscheduler: { direct_api_call: false, called_by: "notebook-dolphin-bridge" },
+      request: requestBody,
+      bridge_accept_response: null,
+      bridge_query_response: null,
+      run_result: null
+    };
+    byId("execution-evidence").textContent = pretty(state.executionEvidence);
     const result = await api("/runs", {
       method: "POST",
-      body: JSON.stringify({ script_id: state.selectedScript.script_id, parameters, file_ids: [] })
+      body: JSON.stringify(requestBody)
     });
+    state.executionEvidence.run_id = result.run_id || null;
+    state.executionEvidence.bridge_accept_response = result;
+    byId("execution-evidence").textContent = pretty(state.executionEvidence);
     message(`执行已受理：${result.run_id}`);
     await Promise.all([loadCurrent(), loadQueue(), loadRuns()]);
     if (result.run_id) await selectRun(result.run_id);
@@ -297,6 +371,67 @@
     const terminal = ["SUCCESS", "FAILED", "STOPPED", "CANCELLED"].includes(String(run.state).toUpperCase());
     byId("run-stop").disabled = terminal;
     byId("run-technical").textContent = pretty({ source: run.source, scheduler: run.scheduler, queue });
+    if (!state.executionEvidence || state.executionEvidence.run_id !== run.run_id) {
+      state.executionEvidence = {
+        run_id: run.run_id,
+        chain: "Demo -> notebook-dolphin-bridge -> DolphinScheduler -> original script",
+        demo_api: {
+          method: "GET",
+          url: new URL(`${apiRoot}/runs/${encodeURIComponent(run.run_id)}`, window.location.href).href
+        },
+        bridge_api: {
+          method: "GET",
+          public_path: `/data-platform/notebook-dolphin-bridge/api/v1/runs/${run.run_id}`,
+          upstream_path: `/api/v1/runs/${run.run_id}`,
+          called_by: "DuckLake Demo server-side BFF"
+        },
+        request: { run_id: run.run_id },
+        bridge_accept_response: null,
+        bridge_query_response: run,
+        run_result: null
+      };
+    } else {
+      state.executionEvidence.bridge_query_response = run;
+    }
+    if (state.executionEvidence) {
+      const projectCode = run.scheduler?.namespace?.technical_id;
+      const workflowCode = run.scheduler?.workflow_definition?.technical_id;
+      const taskCode = run.scheduler?.task_definition?.technical_id;
+      state.executionEvidence.dolphinscheduler = {
+        direct_api_call: false,
+        called_by: "notebook-dolphin-bridge",
+        api: {
+          method: "POST",
+          path: projectCode
+            ? `/projects/${projectCode}/executors/start-workflow-instance`
+            : "Bridge response did not expose a project code"
+        },
+        request_projection: {
+          workflowDefinitionCode: workflowCode,
+          startNodeList: taskCode,
+          startParams: {
+            run_id: run.run_id,
+            dp_task_params_b64: "<由 Bridge 对 parameters 的规范 JSON 进行 Base64 编码>",
+            decoded_parameters: run.parameters,
+            transport: "Bridge 传给 DolphinScheduler 的实际字段为 run_id 和 dp_task_params_b64"
+          }
+        },
+        response_projection: {
+          workflow_instance_id: run.scheduler?.workflow_instance_id,
+          task_instance_id: run.scheduler?.task_instance_id,
+          state: run.scheduler?.state
+        }
+      };
+      state.executionEvidence.run_result = {
+        run_id: run.run_id,
+        state: run.state,
+        parameters: run.parameters,
+        source: run.source,
+        scheduler: run.scheduler,
+        queue
+      };
+      byId("execution-evidence").textContent = pretty(state.executionEvidence);
+    }
     byId("run-logs").textContent = "尚未查询日志";
     byId("run-panel").scrollIntoView({ behavior: "smooth", block: "start" });
   }

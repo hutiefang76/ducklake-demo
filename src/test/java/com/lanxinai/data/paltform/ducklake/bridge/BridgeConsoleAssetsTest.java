@@ -16,7 +16,9 @@ class BridgeConsoleAssetsTest {
         String legacyScript = resource("static/etl-console.js");
 
         assertThat(html).contains("script_name", "script_id", "源码扫描", "全局队列", "执行历史", "停止执行",
-                "scan-refresh", "run-refresh");
+                "scan-refresh", "run-refresh", "name=\"support_level\"", "name=\"runnable\"",
+                "类型 1 · 原生 Python", "类型 2 · 自动参数", "类型 3 · 完整 ETL 契约",
+                "Demo → Bridge → DolphinScheduler 调用证据");
         assertThat(script).contains(
                 "api(\"/scans/latest\")",
                 "api(\"/scans\"",
@@ -27,10 +29,30 @@ class BridgeConsoleAssetsTest {
                 "/stop`",
                 "byId(\"scan-refresh\")",
                 "byId(\"run-refresh\")");
+        assertThat(script).contains(
+                "function automaticParameters(entry)",
+                "类型 1 固定无参数",
+                "query.set(\"support_level\", supportLevel)",
+                "query.set(\"runnable\", runnable)",
+                "spec.allowed_values[0]",
+                "Demo -> notebook-dolphin-bridge -> DolphinScheduler -> original script",
+                "public_path: \"/data-platform/notebook-dolphin-bridge/api/v1/runs\"",
+                "upstream_path: \"/api/v1/runs\"",
+                "direct_api_call: false",
+                "/executors/start-workflow-instance",
+                "workflowDefinitionCode",
+                "decoded_parameters",
+                "workflow_instance_id",
+                "task_instance_id",
+                "bridge_accept_response",
+                "bridge_query_response",
+                "state.executionEvidence.run_id !== run.run_id",
+                "dp_task_params_b64");
+        assertThat(html).doesNotContain("<textarea id=\"run-parameters\"");
         assertThat(script).doesNotContain(
                 "/tasks", "task_key", "tsk_", "/uploads", "/timeline", "/diagnosis", "/lineage",
                 "Authorization", "service_token", "BRIDGE_SERVICE_TOKEN", "DolphinSchedulerClient",
-                "http://60.", "https://60.", "/api/v1");
+                "http://60.", "https://60.");
         assertThat(legacyScript)
                 .contains("etl-console.html?v=20260722-bridge-v1", "window.location.replace")
                 .doesNotContain("/api/bridge", "/api/v1", "service_token");
@@ -47,6 +69,15 @@ class BridgeConsoleAssetsTest {
         assertThat(script).contains("businessRun(current.latest_run)", "businessRun(current.running_run)");
         assertThat(script).doesNotContain("pretty(current)");
         assertThat(script).contains("response.total ?? response.count");
+    }
+
+    @Test
+    void consoleNeverCallsDolphinSchedulerDirectlyAndUsesBridgeContractDefaults() throws IOException {
+        String script = resource("static/bridge-console/app.js");
+
+        assertThat(script)
+                .contains("api(\"/runs\"", "automatic.values", "entry?.parameters", "spec.default")
+                .doesNotContain("fetch(\"/api/v1", "dolphinscheduler/api", "DOLPHINSCHEDULER_TOKEN");
     }
 
     private static String resource(String name) throws IOException {

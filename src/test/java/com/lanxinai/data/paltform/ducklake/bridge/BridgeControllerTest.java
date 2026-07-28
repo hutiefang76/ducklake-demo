@@ -93,10 +93,12 @@ class BridgeControllerTest {
         mvc.perform(get("/api/bridge/scripts")
                         .param("folder_prefix", "mdm_etl")
                         .param("recursive", "true")
+                        .param("support_level", "PARAMETERIZED")
+                        .param("runnable", "true")
                         .param("page", "2")
                         .param("page_size", "25"))
                 .andExpect(status().isOk());
-        verify(client).get("/api/v1/scripts?folder_prefix=mdm_etl&recursive=true&page=2&page_size=25");
+        verify(client).get("/api/v1/scripts?folder_prefix=mdm_etl&recursive=true&support_level=PARAMETERIZED&runnable=true&page=2&page_size=25");
 
         mvc.perform(get("/api/bridge/runs")
                         .param("script_id", "scr_orders_0123456789abcdfg")

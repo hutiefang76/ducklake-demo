@@ -62,6 +62,14 @@ BRIDGE_SERVICE_TOKEN=<由 K8s Secret 注入>
 
 这三个变量只配置 Bridge 连接；Workflow、Node、TaskGroup 和实例映射全部由 Bridge 管理。
 
+ETL 验收台将 Bridge 脚本按统一三层能力展示：
+
+- 类型 1 `PYTHON_ONLY`：固定使用空参数 `{}`，直接执行原始脚本；
+- 类型 2 `PARAMETERIZED`：从参数契约的 `default` 或 `allowed_values` 自动生成参数；
+- 类型 3 `FULL`：同样自动生成参数，并展示输入、输出、血缘和完整 ETL 契约。
+
+列表支持按目录、支持类型和是否可执行筛选。执行详情展示 Demo BFF 地址、Bridge v1 公网/上游路由、请求体、Bridge 返回值，以及 Bridge 查询到的 DolphinScheduler 启动 API 路径、参数投影、Workflow/Task/实例结果。Demo 不持有 DolphinScheduler token，也不直连 DolphinScheduler。
+
 
 首次在新电脑使用时：
 
