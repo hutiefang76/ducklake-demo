@@ -62,6 +62,24 @@
     };
   }
 
+  function dolphinSchedulerStartParams(run) {
+    const parameters = run?.parameters
+      && typeof run.parameters === "object"
+      && !Array.isArray(run.parameters)
+      ? run.parameters
+      : {};
+    if (Object.keys(parameters).length === 0) {
+      return {
+        startParams: {},
+        transport: "类型 1：DolphinScheduler startParams 为空，直接执行原始 Python 脚本"
+      };
+    }
+    return {
+      startParams: Object.assign({ run_id: run.run_id }, parameters, { run_id: run.run_id }),
+      transport: "类型 2/3：DolphinScheduler startParams 包含 run_id 和直接业务参数"
+    };
+  }
+
   function message(value, error = false) {
     const node = byId("message");
     node.textContent = value;
@@ -397,6 +415,7 @@
       const projectCode = run.scheduler?.namespace?.technical_id;
       const workflowCode = run.scheduler?.workflow_definition?.technical_id;
       const taskCode = run.scheduler?.task_definition?.technical_id;
+      const schedulerStartParams = dolphinSchedulerStartParams(run);
       state.executionEvidence.dolphinscheduler = {
         direct_api_call: false,
         called_by: "notebook-dolphin-bridge",
@@ -409,12 +428,8 @@
         request_projection: {
           workflowDefinitionCode: workflowCode,
           startNodeList: taskCode,
-          startParams: {
-            run_id: run.run_id,
-            dp_task_params_b64: "<由 Bridge 对 parameters 的规范 JSON 进行 Base64 编码>",
-            decoded_parameters: run.parameters,
-            transport: "Bridge 传给 DolphinScheduler 的实际字段为 run_id 和 dp_task_params_b64"
-          }
+          startParams: schedulerStartParams.startParams,
+          transport: schedulerStartParams.transport
         },
         response_projection: {
           workflow_instance_id: run.scheduler?.workflow_instance_id,

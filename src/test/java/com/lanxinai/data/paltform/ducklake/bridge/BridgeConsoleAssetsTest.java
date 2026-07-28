@@ -41,13 +41,16 @@ class BridgeConsoleAssetsTest {
                 "direct_api_call: false",
                 "/executors/start-workflow-instance",
                 "workflowDefinitionCode",
-                "decoded_parameters",
+                "dolphinSchedulerStartParams(run)",
+                "startParams: {}",
+                "类型 1：DolphinScheduler startParams 为空",
+                "Object.assign({ run_id: run.run_id }, parameters, { run_id: run.run_id })",
+                "类型 2/3：DolphinScheduler startParams 包含 run_id 和直接业务参数",
                 "workflow_instance_id",
                 "task_instance_id",
                 "bridge_accept_response",
                 "bridge_query_response",
-                "state.executionEvidence.run_id !== run.run_id",
-                "dp_task_params_b64");
+                "state.executionEvidence.run_id !== run.run_id");
         assertThat(html).doesNotContain("<textarea id=\"run-parameters\"");
         assertThat(script).doesNotContain(
                 "/tasks", "task_key", "tsk_", "/uploads", "/timeline", "/diagnosis", "/lineage",
@@ -77,7 +80,8 @@ class BridgeConsoleAssetsTest {
 
         assertThat(script)
                 .contains("api(\"/runs\"", "automatic.values", "entry?.parameters", "spec.default")
-                .doesNotContain("fetch(\"/api/v1", "dolphinscheduler/api", "DOLPHINSCHEDULER_TOKEN");
+                .doesNotContain("fetch(\"/api/v1", "dolphinscheduler/api", "DOLPHINSCHEDULER_TOKEN",
+                        "dp_task_params_b64", "decoded_parameters");
     }
 
     private static String resource(String name) throws IOException {
