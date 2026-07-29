@@ -86,6 +86,21 @@ class BridgeControllerTest {
     }
 
     @Test
+    void forwardsBranchOptionsOnlyThroughBridge() throws Exception {
+        when(client.get("/api/v1/scans/options")).thenReturn(new BridgeClient.BridgeResponse(200,
+                mapper.readTree("""
+                        {"default_repository_ref":"refs/heads/main",
+                         "available_repository_refs":["refs/heads/main","refs/heads/codex/showcase"],
+                         "active_repository_ref":"refs/heads/main"}
+                        """)));
+
+        mvc.perform(get("/api/bridge/scans/options"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.default_repository_ref").value("refs/heads/main"));
+        verify(client).get("/api/v1/scans/options");
+    }
+
+    @Test
     void forwardsOnlyAllowedScriptAndRunPagination() throws Exception {
         when(client.get(anyString())).thenReturn(new BridgeClient.BridgeResponse(200,
                 mapper.readTree("{\"items\":[],\"total\":0}")));

@@ -19,10 +19,13 @@
 <main>
   <section class="card scan-card">
     <div class="section-title">
-      <div><h2>源码扫描</h2><p>触发扫描并查看最近一次结果。</p></div>
+      <div><h2>源码分支与扫描</h2><p>分支只在 Bridge 设置；成功扫描发布后才切换当前生效分支。</p></div>
       <div class="actions">
+        <label>源码分支
+          <select id="scan-ref" aria-label="源码分支"><option value="refs/heads/main">main</option></select>
+        </label>
         <button id="scan-refresh" class="secondary" type="button">刷新状态</button>
-        <button id="scan-start" type="button">执行扫描</button>
+        <button id="scan-start" type="button">切换并扫描</button>
       </div>
     </div>
     <div id="scan-summary" class="facts"></div>

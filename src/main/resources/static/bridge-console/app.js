@@ -126,6 +126,22 @@
     node.className = `badge${ready ? "" : " bad"}`;
   }
 
+  async function loadScanOptions() {
+    const response = await api("/scans/options");
+    const select = byId("scan-ref");
+    const branches = Array.isArray(response.available_repository_refs)
+      ? response.available_repository_refs : [];
+    const selected = response.active_repository_ref || response.default_repository_ref || "refs/heads/main";
+    const options = branches.includes(selected) ? branches : [selected, ...branches];
+    select.replaceChildren(...options.map((ref) => {
+      const option = document.createElement("option");
+      option.value = ref;
+      option.textContent = ref.replace(/^refs\/heads\//, "");
+      return option;
+    }));
+    select.value = selected;
+  }
+
   async function loadLatestScan() {
     const response = await api("/scans/latest");
     const scan = response.scan;
@@ -137,6 +153,7 @@
     }
     fact(host, "Scan ID", scan.scan_id);
     fact(host, "状态", scan.state);
+    fact(host, "分支", scan.repository_ref || "refs/heads/main");
     fact(host, "发现", scan.discovered_count ?? 0);
     fact(host, "接收", scan.accepted_count ?? 0);
     fact(host, "拒绝", scan.rejected_count ?? 0);
@@ -144,7 +161,11 @@
   }
 
   async function startScan() {
-    const scan = await api("/scans", { method: "POST", body: "{}" });
+    const repositoryRef = byId("scan-ref").value || "refs/heads/main";
+    const scan = await api("/scans", {
+      method: "POST",
+      body: JSON.stringify({ repository_ref: repositoryRef })
+    });
     message(`扫描已受理：${scan.scan_id || "已提交"}`);
     await loadLatestScan();
   }
@@ -476,7 +497,7 @@
 
   function bind() {
     byId("scan-start").addEventListener("click", safe(startScan));
-    byId("scan-refresh").addEventListener("click", safe(loadLatestScan));
+    byId("scan-refresh").addEventListener("click", safe(() => Promise.all([loadScanOptions(), loadLatestScan()])));
     byId("scripts-refresh").addEventListener("click", safe(loadScripts));
     byId("script-filter").addEventListener("submit", (event) => {
       event.preventDefault(); state.scriptPage = 1; safe(loadScripts)();
@@ -495,6 +516,6 @@
   }
 
   bind();
-  Promise.all([loadStatus(), loadLatestScan(), loadScripts(), loadQueue(), loadRuns()])
+  Promise.all([loadStatus(), loadScanOptions(), loadLatestScan(), loadScripts(), loadQueue(), loadRuns()])
     .catch((error) => message(error.message || "初始化失败", true));
 })();

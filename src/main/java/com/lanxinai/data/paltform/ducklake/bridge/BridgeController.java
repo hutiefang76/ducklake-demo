@@ -89,6 +89,12 @@ public class BridgeController {
         return forward(client.post("/api/v1/scans", body, key(idempotencyKey)));
     }
 
+    @GetMapping("/scans/options")
+    @Operation(summary = "查询可切换的源码分支")
+    public ResponseEntity<JsonNode> scanOptions() {
+        return forward(client.get("/api/v1/scans/options"));
+    }
+
     @GetMapping("/scans/latest")
     @Operation(summary = "查询最新扫描状态")
     public ResponseEntity<JsonNode> latestScan() {

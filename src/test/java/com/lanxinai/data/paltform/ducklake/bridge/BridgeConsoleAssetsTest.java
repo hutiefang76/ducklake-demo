@@ -15,13 +15,16 @@ class BridgeConsoleAssetsTest {
         String script = resource("static/bridge-console/app.js");
         String legacyScript = resource("static/etl-console.js");
 
-        assertThat(html).contains("script_name", "script_id", "源码扫描", "全局队列", "执行历史", "停止执行",
+        assertThat(html).contains("script_name", "script_id", "源码分支与扫描", "全局队列", "执行历史", "停止执行",
                 "scan-refresh", "run-refresh", "name=\"support_level\"", "name=\"runnable\"",
+                "id=\"scan-ref\"", "切换并扫描",
                 "类型 1 · 原生 Python", "类型 2 · 自动参数", "类型 3 · 完整 ETL 契约",
                 "Demo → Bridge → DolphinScheduler 调用证据");
         assertThat(script).contains(
+                "api(\"/scans/options\")",
                 "api(\"/scans/latest\")",
                 "api(\"/scans\"",
+                "JSON.stringify({ repository_ref: repositoryRef })",
                 "api(`/scripts?",
                 "api(`/runs/current?",
                 "api(\"/queue\")",
