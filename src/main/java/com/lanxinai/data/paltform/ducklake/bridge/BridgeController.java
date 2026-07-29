@@ -165,6 +165,16 @@ public class BridgeController {
                 null, null));
     }
 
+    @PostMapping("/runs/{runId}/retry")
+    @Operation(summary = "重试并创建新执行")
+    public ResponseEntity<JsonNode> retry(
+            @PathVariable String runId,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
+        return forward(client.post("/api/v1/runs/"
+                + require(RUN_ID, runId, "run_id") + "/retry",
+                null, key(idempotencyKey)));
+    }
+
     @GetMapping("/queue")
     @Operation(summary = "查询全局排队情况")
     public ResponseEntity<JsonNode> queue() {

@@ -408,7 +408,9 @@
     fact(host, "完成", run.finished_at);
     fact(host, "队列位置", queue.queue?.position ?? "—");
     const terminal = ["SUCCESS", "FAILED", "STOPPED", "CANCELLED"].includes(String(run.state).toUpperCase());
+    const retryable = ["FAILED", "STOPPED", "CANCELLED"].includes(String(run.state).toUpperCase());
     byId("run-stop").disabled = terminal;
+    byId("run-retry").disabled = !retryable;
     byId("run-technical").textContent = pretty({ source: run.source, scheduler: run.scheduler, queue });
     if (!state.executionEvidence || state.executionEvidence.run_id !== run.run_id) {
       state.executionEvidence = {
@@ -488,6 +490,19 @@
     await Promise.all([selectRun(state.selectedRun.run_id), loadCurrent(), loadQueue(), loadRuns()]);
   }
 
+  async function retryRun() {
+    if (!state.selectedRun) throw new Error("请先选择执行记录");
+    const previousRunId = state.selectedRun.run_id;
+    const response = await api(`/runs/${encodeURIComponent(previousRunId)}/retry`, {
+      method: "POST",
+      headers: { "Idempotency-Key": `demo-retry-${previousRunId}-${Date.now()}` },
+      body: "{}"
+    });
+    message(`重试已创建：${response.run_id}`);
+    state.executionEvidence = null;
+    await Promise.all([selectRun(response.run_id), loadCurrent(), loadQueue(), loadRuns()]);
+  }
+
   function safe(action) {
     return async (...args) => {
       try { await action(...args); }
@@ -512,6 +527,7 @@
     byId("run-next").addEventListener("click", () => { state.runPage++; safe(loadRuns)(); });
     byId("run-refresh").addEventListener("click", () => safe(() => selectRun(state.selectedRun?.run_id))());
     byId("run-log").addEventListener("click", safe(loadLogs));
+    byId("run-retry").addEventListener("click", safe(retryRun));
     byId("run-stop").addEventListener("click", safe(stopRun));
   }
 

@@ -9,6 +9,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -146,6 +148,11 @@ class BridgeControllerTest {
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isAccepted());
+        mvc.perform(post("/api/bridge/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/retry")
+                        .header("Idempotency-Key", "retry-fixture"))
+                .andExpect(status().isAccepted());
+        verify(client).post(eq("/api/v1/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/retry"),
+                isNull(), eq("retry-fixture"));
         mvc.perform(get("/api/bridge/queue/run_01ARZ3NDEKTSV4RRFFQ69G5FAV"))
                 .andExpect(status().isOk());
         mvc.perform(get("/api/bridge/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/logs").param("limit", "500"))
