@@ -28,17 +28,190 @@
   const items = (value) => Array.isArray(value?.items) ? value.items : [];
   const hasOwn = (value, name) => Object.prototype.hasOwnProperty.call(value || {}, name);
 
-  function supportType(level) {
+  function supportType(level, entry = {}) {
+    const normalizedLevel = String(level || "").toUpperCase();
+    const normalizedRole = String(entry.role || entry.contract?.role || "").toUpperCase();
+    const auxiliaryLevels = ["AUXILIARY", "AUXILIARY_FILE", "UNSUPPORTED", "NONE"];
+    const auxiliaryRoles = ["AUXILIARY", "HELPER", "SUPPORT", "LIBRARY"];
+    if (auxiliaryLevels.includes(normalizedLevel) || auxiliaryRoles.includes(normalizedRole)) {
+      return "辅助文件";
+    }
+    const labels = {
+      PYTHON_ONLY: "原生 Python",
+      PARAMETERIZED: "自动参数",
+      FULL: "完整 ETL 契约"
+    };
+    return labels[normalizedLevel] || "辅助文件";
+  }
+
+  function firstValue(entry, paths) {
+    for (const path of paths) {
+      let value = entry;
+      for (const part of path) value = value?.[part];
+      if (value !== undefined && value !== null && value !== "") return value;
+    }
+    return null;
+  }
+
+  function observed(value) {
+    if (value === null) return "未返回";
+    if (typeof value === "object") return value.status || value.name || value.type || "已声明";
+    return String(value);
+  }
+
+  function schedulerBinding(entry) {
+    const value = firstValue(entry, [
+      ["scheduler", "binding_status"], ["scheduler", "binding_state"],
+      ["scheduler", "binding", "status"], ["scheduler", "mapping_status"]
+    ]);
+    if (value !== null) return value;
+    if (entry.scheduler?.bound === true) return "BOUND";
+    if (entry.scheduler?.bound === false) return "UNBOUND";
+    return null;
+  }
+
+  function executableBasis(entry) {
+    const level = String(entry.support_level || "").toUpperCase();
+    const role = firstValue(entry, [["role"], ["contract", "role"]]);
+    const adapter = firstValue(entry, [["adapter"], ["contract", "adapter"]]);
+    const etlRunnable = firstValue(entry, [["etl_script", "runnable"], ["contract", "etl_script", "runnable"]]);
+    const syntax = firstValue(entry, [
+      ["syntax_status"], ["compile_status"], ["cli_status"], ["scan", "compile_status"]
+    ]);
+    const binding = schedulerBinding(entry);
+    let rule;
+    if (level === "PYTHON_ONLY") {
+      rule = "原生 Python 最终可执行需同时满足：adapter 为空、etl_script.runnable=true，且 DolphinScheduler main 中存在同名标准 PYTHON 节点并为 BOUND；role 参与分类，但不会单独排除原始辅助脚本。";
+    } else if (["PARAMETERIZED", "FULL"].includes(level)) {
+      rule = "自动参数/完整 ETL 契约最终可执行需同时满足：role=task、有效 adapter 和 contract，且 DolphinScheduler 工作流绑定为 BOUND。";
+    } else {
+      rule = "辅助文件不是直接执行入口；最终结果由 Bridge 扫描分类和 DolphinScheduler 绑定共同判定。";
+    }
     return {
-      PYTHON_ONLY: "类型 1 · 原生 Python",
-      PARAMETERIZED: "类型 2 · 自动参数",
-      FULL: "类型 3 · 完整 ETL 契约"
-    }[String(level || "").toUpperCase()] || `未知类型 · ${level || "—"}`;
+      rule: `Python 语法或编译成功只是前置门槛，不等于可执行。${rule}`,
+      observed: `当前值：语法/编译=${observed(syntax)}；role=${observed(role)}；adapter=${adapter === null ? "空或未返回" : observed(adapter)}；etl_script.runnable=${observed(etlRunnable)}；DolphinScheduler=${observed(binding)}；Bridge runnable=${entry.runnable === true ? "true" : "false"}。`
+    };
+  }
+
+  function parkPanel(panel, hostId) {
+    if (!panel) return;
+    panel.classList.add("hidden");
+    byId("panel-parking").append(panel);
+    byId(hostId)?.remove();
+  }
+
+  function attachScriptPanel(sourceRow) {
+    const panel = byId("script-panel");
+    parkPanel(byId("run-panel"), "run-inline-detail");
+    parkPanel(panel, "script-inline-detail");
+    const host = document.createElement("div");
+    host.id = "script-inline-detail";
+    host.className = "script-inline-detail";
+    sourceRow.after(host);
+    host.append(panel);
+    panel.classList.remove("hidden");
+  }
+
+  function attachRunPanel(sourceRow) {
+    const panel = byId("run-panel");
+    parkPanel(panel, "run-inline-detail");
+    const row = document.createElement("tr");
+    row.id = "run-inline-detail";
+    row.className = "run-inline-detail";
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.append(panel);
+    row.append(cell);
+    sourceRow.after(row);
+    panel.classList.remove("hidden");
+  }
+
+  function openTreeAncestors(row) {
+    let current = row?.parentElement;
+    while (current) {
+      if (current.tagName === "DETAILS") current.open = true;
+      current = current.parentElement;
+    }
+  }
+
+  function findScriptRow(scriptId) {
+    return Array.from(document.querySelectorAll(".script-row"))
+      .find((row) => row.dataset.scriptId === String(scriptId));
+  }
+
+  function scriptPath(entry) {
+    return String(entry.script_name || entry.source_path || entry.script_id || "未命名脚本")
+      .replace(/\\/g, "/").replace(/\.py$/i, "");
+  }
+
+  function buildScriptTree(scripts) {
+    const root = { folders: new Map(), scripts: [] };
+    scripts.forEach((entry) => {
+      const parts = scriptPath(entry).split("/").filter(Boolean);
+      const name = parts.pop() || entry.script_id || "未命名脚本";
+      let node = root;
+      parts.forEach((folderName) => {
+        if (!node.folders.has(folderName)) {
+          node.folders.set(folderName, { name: folderName, folders: new Map(), scripts: [] });
+        }
+        node = node.folders.get(folderName);
+      });
+      node.scripts.push({ entry, name });
+    });
+    return root;
+  }
+
+  function treeScriptCount(node) {
+    let count = node.scripts.length;
+    node.folders.forEach((folder) => { count += treeScriptCount(folder); });
+    return count;
+  }
+
+  function renderScriptRow(item, depth) {
+    const row = document.createElement("div");
+    row.className = "script-row";
+    row.dataset.scriptId = item.entry.script_id;
+    row.setAttribute("role", "row");
+    const name = text("span", item.name, "tree-file-name");
+    name.style.setProperty("--tree-indent", `${depth * 18}px`);
+    const actions = document.createElement("span");
+    actions.append(button("详情 / 执行", () => selectScript(item.entry.script_id, row)));
+    row.append(
+      name,
+      text("span", item.entry.script_id),
+      text("span", supportType(item.entry.support_level, item.entry)),
+      text("span", item.entry.runnable ? "是" : "否"),
+      actions
+    );
+    return row;
+  }
+
+  function renderScriptTree(node, host, depth = 0, expand = false) {
+    Array.from(node.folders.values())
+      .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
+      .forEach((folder) => {
+        const details = document.createElement("details");
+        details.className = "tree-folder";
+        details.open = expand;
+        const summary = document.createElement("summary");
+        summary.className = "tree-folder-row";
+        const name = text("span", `${folder.name} (${treeScriptCount(folder)})`, "tree-folder-name");
+        name.style.setProperty("--tree-indent", `${depth * 18}px`);
+        summary.append(name, text("span", ""), text("span", ""), text("span", ""), text("span", ""));
+        const children = document.createElement("div");
+        children.className = "tree-children";
+        renderScriptTree(folder, children, depth + 1, expand);
+        details.append(summary, children);
+        host.append(details);
+      });
+    node.scripts
+      .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
+      .forEach((item) => host.append(renderScriptRow(item, depth)));
   }
 
   function automaticParameters(entry) {
     if (String(entry?.support_level).toUpperCase() === "PYTHON_ONLY") {
-      return { values: {}, missing: [], source: "类型 1 固定无参数，直接执行原始脚本" };
+      return { values: {}, missing: [], source: "原生 Python 固定无参数，直接执行原始脚本" };
     }
     const specs = Array.isArray(entry?.parameters)
       ? entry.parameters
@@ -73,12 +246,12 @@
     if (Object.keys(parameters).length === 0) {
       return {
         startParams: {},
-        transport: "类型 1：DolphinScheduler startParams 为空，直接执行原始 Python 脚本"
+        transport: "原生 Python：DolphinScheduler startParams 为空，直接执行原始 Python 脚本"
       };
     }
     return {
       startParams: Object.assign({ run_id: run.run_id }, parameters, { run_id: run.run_id }),
-      transport: "类型 2/3：DolphinScheduler startParams 包含 run_id 和直接业务参数"
+      transport: "自动参数/完整 ETL 契约：DolphinScheduler startParams 包含 run_id 和直接业务参数"
     };
   }
 
@@ -160,9 +333,9 @@
     fact(host, "Scan ID", scan.scan_id);
     fact(host, "状态", scan.state);
     fact(host, "分支", scan.repository_ref || "refs/heads/main");
-    fact(host, "发现", scan.discovered_count ?? 0);
-    fact(host, "接收", scan.accepted_count ?? 0);
-    fact(host, "拒绝", scan.rejected_count ?? 0);
+    fact(host, "扫描文件", scan.discovered_count ?? 0);
+    fact(host, "已入库", scan.accepted_count ?? 0);
+    fact(host, "需处理", scan.rejected_count ?? 0);
     fact(host, "Commit", scan.resolved_head_commit || scan.expected_head_commit || "—");
   }
 
@@ -178,7 +351,7 @@
 
   function scriptQuery() {
     const form = new FormData(byId("script-filter"));
-    const query = new URLSearchParams({ page: String(state.scriptPage), page_size: "25" });
+    const query = new URLSearchParams({ all: "true", page_size: "200" });
     const q = String(form.get("q") || "").trim();
     const folder = String(form.get("folder_prefix") || "").trim();
     const supportLevel = String(form.get("support_level") || "").trim();
@@ -193,51 +366,50 @@
 
   async function loadScripts() {
     const response = await api(`/scripts?${scriptQuery()}`);
+    parkPanel(byId("run-panel"), "run-inline-detail");
+    parkPanel(byId("script-panel"), "script-inline-detail");
+    state.selectedScript = null;
+    state.selectedRun = null;
     const rows = byId("script-rows");
     rows.replaceChildren();
     const scripts = items(response);
     if (!scripts.length) {
-      const row = document.createElement("tr");
-      const cell = text("td", "没有匹配的业务脚本", "empty");
-      cell.colSpan = 5;
-      row.append(cell);
-      rows.append(row);
+      rows.append(text("div", "没有匹配的业务脚本", "empty"));
+    } else {
+      const form = new FormData(byId("script-filter"));
+      const expand = Boolean(String(form.get("q") || "").trim() || String(form.get("folder_prefix") || "").trim());
+      renderScriptTree(buildScriptTree(scripts), rows, 0, expand);
     }
-    scripts.forEach((entry) => {
-      const row = document.createElement("tr");
-      const actions = document.createElement("td");
-      actions.append(button("详情", () => selectScript(entry.script_id)));
-      row.append(
-        text("td", entry.script_name),
-        text("td", entry.script_id),
-        text("td", `${supportType(entry.support_level)} (${entry.support_level || "—"})`),
-        text("td", entry.runnable ? "是" : "否"),
-        actions
-      );
-      rows.append(row);
-    });
     const total = Number(response.total ?? response.count ?? scripts.length);
-    state.scriptPages = Number(response.total_pages || Math.max(1, Math.ceil(total / 25)));
-    byId("script-page").textContent = `第 ${state.scriptPage} / ${state.scriptPages} 页，共 ${total} 个`;
-    byId("script-prev").disabled = state.scriptPage <= 1;
-    byId("script-next").disabled = state.scriptPage >= state.scriptPages;
+    byId("script-page").textContent = total === scripts.length
+      ? `共 ${total} 个业务脚本，点击文件夹展开`
+      : `已展示 ${scripts.length} / ${total} 个业务脚本；单次最多读取 200 个`;
   }
 
-  async function selectScript(scriptId) {
+  async function selectScript(scriptId, sourceRow = findScriptRow(scriptId)) {
+    if (!sourceRow) throw new Error("当前目录树中没有该脚本，请清除筛选条件后重试");
+    openTreeAncestors(sourceRow);
     const detail = await api(`/scripts/${encodeURIComponent(scriptId)}`);
     const entry = detail.script || detail;
     state.selectedScript = entry;
+    state.selectedRun = null;
     state.runPage = 1;
-    byId("script-panel").classList.remove("hidden");
+    attachScriptPanel(sourceRow);
     byId("script-title").textContent = entry.script_name;
-    byId("script-id").textContent = entry.script_id;
+    byId("script-id").textContent = `Bridge 脚本 ID：${entry.script_id}`;
     const host = byId("script-facts");
     host.replaceChildren();
     fact(host, "源码", entry.source_path);
     fact(host, "格式", entry.source_format);
     fact(host, "契约", entry.contract_status);
-    fact(host, "支持类型", supportType(entry.support_level));
+    fact(host, "支持类型", supportType(entry.support_level, entry));
     fact(host, "可执行", entry.runnable ? "是" : "否");
+    const basis = executableBasis(entry);
+    byId("runnable-basis").replaceChildren(
+      text("strong", "可执行判断依据"),
+      text("p", basis.rule),
+      text("p", basis.observed, "hint")
+    );
     const automatic = automaticParameters(entry);
     byId("run-parameters").textContent = pretty(automatic.values);
     byId("parameter-source").textContent = automatic.source;
@@ -245,6 +417,7 @@
     byId("execution-evidence").textContent = "尚未执行";
     configureFileInput(entry);
     byId("script-technical").textContent = pretty({
+      runnable_basis: basis,
       contract: entry.contract,
       parameters: entry.parameters,
       files: state.fileContracts,
@@ -254,9 +427,8 @@
       scan: detail.scan
     });
     await Promise.all([loadCurrent(), loadRuns()]);
-    byId("script-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    byId("script-inline-detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
-
   function scriptFiles(entry) {
     if (Array.isArray(entry?.files)) return entry.files;
     if (Array.isArray(entry?.contract?.files)) return entry.contract.files;
@@ -463,23 +635,31 @@
   }
 
   async function loadRuns() {
-    const response = await api(`/runs?${runQuery()}`);
     const rows = byId("run-rows");
+    parkPanel(byId("run-panel"), "run-inline-detail");
     rows.replaceChildren();
+    if (!state.selectedScript) {
+      byId("run-page").textContent = "请先选择业务脚本";
+      byId("run-prev").disabled = true;
+      byId("run-next").disabled = true;
+      return;
+    }
+    const response = await api(`/runs?${runQuery()}`);
     const runs = items(response);
     if (!runs.length) {
       const row = document.createElement("tr");
-      const cell = text("td", "暂无执行历史", "empty");
+      const cell = text("td", "此脚本暂无执行记录", "empty");
       cell.colSpan = 5;
       row.append(cell);
       rows.append(row);
     }
     runs.forEach((entry) => {
       const actions = document.createElement("td");
-      actions.append(button("查看", () => selectRun(entry.run_id)));
       const stateCell = document.createElement("td");
       stateCell.append(badge(entry.state));
       const row = document.createElement("tr");
+      row.dataset.runId = entry.run_id;
+      actions.append(button("查看", () => selectRun(entry.run_id, row)));
       row.append(
         text("td", entry.run_id),
         text("td", entry.script_name || entry.script_id),
@@ -496,23 +676,36 @@
     byId("run-next").disabled = state.runPage >= state.runPages;
   }
 
-  async function selectRun(runId) {
+  async function selectRun(runId, sourceRow = null) {
     if (!runId) return;
     const [run, queue] = await Promise.all([
       api(`/runs/${encodeURIComponent(runId)}`),
       api(`/queue/${encodeURIComponent(runId)}`)
     ]);
+    if (!state.selectedScript || state.selectedScript.script_id !== run.script_id) {
+      const scriptRow = findScriptRow(run.script_id);
+      if (!scriptRow) throw new Error("当前目录树中没有该 Run 对应的脚本，请清除筛选条件后重试");
+      await selectScript(run.script_id, scriptRow);
+    }
+    const row = sourceRow && sourceRow.isConnected
+      ? sourceRow
+      : Array.from(byId("run-rows").querySelectorAll("tr"))
+        .find((candidate) => candidate.dataset.runId === String(runId));
+    if (!row) throw new Error("该 Run 不在当前执行记录页，请翻页后查看");
+    attachRunPanel(row);
     state.selectedRun = run;
-    byId("run-panel").classList.remove("hidden");
-    byId("run-title").textContent = run.run_id;
-    byId("run-business").textContent = `${run.script_name || "—"} · ${run.script_id || "—"}`;
+    byId("run-title").textContent = `执行详情 · Bridge Run ID：${run.run_id}`;
+    byId("run-business").textContent = `${run.script_name || "—"} · Bridge 脚本 ID：${run.script_id || "—"}`;
     const host = byId("run-facts");
     host.replaceChildren();
+    fact(host, "Bridge Run ID", run.run_id);
     fact(host, "状态", run.state);
     fact(host, "创建", run.created_at);
     fact(host, "开始", run.started_at);
     fact(host, "完成", run.finished_at);
     fact(host, "队列位置", queue.queue?.position ?? "—");
+    fact(host, "DolphinScheduler Workflow Instance ID", run.scheduler?.workflow_instance_id ?? "—");
+    fact(host, "DolphinScheduler Task Instance ID", run.scheduler?.task_instance_id ?? "—");
     const terminal = ["SUCCESS", "FAILED", "STOPPED", "CANCELLED"].includes(String(run.state).toUpperCase());
     const retryable = ["FAILED", "STOPPED", "CANCELLED"].includes(String(run.state).toUpperCase());
     byId("run-stop").disabled = terminal;
@@ -577,9 +770,8 @@
       byId("execution-evidence").textContent = pretty(state.executionEvidence);
     }
     byId("run-logs").textContent = "尚未查询日志";
-    byId("run-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    byId("run-inline-detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
-
   async function loadLogs() {
     if (!state.selectedRun) throw new Error("请先选择执行记录");
     const logs = await api(`/runs/${encodeURIComponent(state.selectedRun.run_id)}/logs?limit=500`);
@@ -593,7 +785,8 @@
       body: "{}"
     });
     message(`停止请求已受理：${response.run_id || state.selectedRun.run_id}`);
-    await Promise.all([selectRun(state.selectedRun.run_id), loadCurrent(), loadQueue(), loadRuns()]);
+    await Promise.all([loadCurrent(), loadQueue(), loadRuns()]);
+    await selectRun(state.selectedRun.run_id);
   }
 
   async function retryRun() {
@@ -606,7 +799,8 @@
     });
     message(`重试已创建：${response.run_id}`);
     state.executionEvidence = null;
-    await Promise.all([selectRun(response.run_id), loadCurrent(), loadQueue(), loadRuns()]);
+    await Promise.all([loadCurrent(), loadQueue(), loadRuns()]);
+    await selectRun(response.run_id);
   }
 
   function safe(action) {
@@ -623,8 +817,6 @@
     byId("script-filter").addEventListener("submit", (event) => {
       event.preventDefault(); state.scriptPage = 1; safe(loadScripts)();
     });
-    byId("script-prev").addEventListener("click", () => { state.scriptPage--; safe(loadScripts)(); });
-    byId("script-next").addEventListener("click", () => { state.scriptPage++; safe(loadScripts)(); });
     byId("current-refresh").addEventListener("click", safe(loadCurrent));
     byId("run-file").addEventListener("change", resetSelectedFile);
     byId("file-upload").addEventListener("click", safe(uploadFile));
@@ -640,6 +832,6 @@
   }
 
   bind();
-  Promise.all([loadStatus(), loadScanOptions(), loadLatestScan(), loadScripts(), loadQueue(), loadRuns()])
+  Promise.all([loadStatus(), loadScanOptions(), loadLatestScan(), loadScripts(), loadQueue()])
     .catch((error) => message(error.message || "初始化失败", true));
 })();

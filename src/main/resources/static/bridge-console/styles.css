@@ -58,3 +58,33 @@ summary { cursor: pointer; color: var(--brand); font-weight: 650; }
 .hint { margin: 4px 0 10px; color: var(--muted); font-size: 13px; }
 .evidence { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 @media (max-width: 800px) { header, .section-title { align-items: flex-start; flex-direction: column; } .split { grid-template-columns: 1fr; } }
+.panel-parking { display: none; }
+.script-tree { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.script-tree-head, .script-row, .tree-folder-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) minmax(220px, 1.4fr) minmax(150px, 1fr) 80px 120px;
+  align-items: start;
+  min-width: 920px;
+}
+.script-tree-head { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; background: #f8fafc; }
+.script-tree-head > span, .script-row > span, .tree-folder-row > span { padding: 11px 9px; }
+.script-row { border-top: 1px solid var(--line); background: white; }
+.script-row:hover { background: #f8fbff; }
+.script-row > span { overflow-wrap: anywhere; }
+.script-row > span:last-child { text-align: right; }
+.tree-folder { margin: 0; }
+.tree-folder > summary { list-style: none; cursor: pointer; border-top: 1px solid var(--line); background: #f8fafc; color: var(--ink); font-weight: 650; }
+.tree-folder > summary::-webkit-details-marker { display: none; }
+.tree-folder-name, .tree-file-name { padding-left: calc(9px + var(--tree-indent, 0px)) !important; }
+.tree-folder-name::before { content: "▸ 📁 "; color: var(--brand); }
+.tree-folder[open] > summary .tree-folder-name::before { content: "▾ 📂 "; }
+.tree-file-name::before { content: "• "; color: var(--muted); }
+.tree-total { margin: 10px 0 0; color: var(--muted); font-size: 13px; text-align: right; }
+.script-inline-detail { margin: 0 0 12px; border-top: 1px solid var(--line); }
+.inline-panel { padding: 20px; background: #f8fbff; border: 2px solid #b8d4f4; border-radius: 10px; }
+.run-inline-detail > td { padding: 0 9px 14px; background: #f8fbff; }
+.run-inline-panel { padding: 16px; border: 1px solid #b8d4f4; border-radius: 9px; background: white; }
+.runnable-basis { margin: 10px 0 18px; padding: 12px 14px; border-left: 4px solid var(--brand); border-radius: 6px; background: #eef6ff; }
+.runnable-basis p { margin: 6px 0 0; }
+.scan-details { margin-top: 8px; }
+.script-runs { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }

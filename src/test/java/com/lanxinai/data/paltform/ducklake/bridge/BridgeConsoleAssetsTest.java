@@ -13,15 +13,20 @@ class BridgeConsoleAssetsTest {
     void consoleUsesOnlyFreshBridgeBusinessRoutes() throws IOException {
         String html = resource("static/etl-console.html");
         String script = resource("static/bridge-console/app.js");
+        String styles = resource("static/bridge-console/styles.css");
         String legacyScript = resource("static/etl-console.js");
         String application = resource("application.yml");
 
-        assertThat(html).contains("script_name", "script_id", "源码分支与扫描", "全局队列", "执行历史", "停止执行", "重试执行",
+        assertThat(html).contains("源码分支与扫描", "扫描详情", "全局队列", "停止执行", "重试执行",
                 "scan-refresh", "run-refresh", "name=\"support_level\"", "name=\"runnable\"",
-                "id=\"scan-ref\"", "切换并扫描",
-                "类型 1 · 原生 Python", "类型 2 · 自动参数", "类型 3 · 完整 ETL 契约",
+                "id=\"scan-ref\"", "切换并扫描", "role=\"treegrid\"", "id=\"script-rows\"",
+                "原生 Python", "自动参数", "完整 ETL 契约", "辅助文件",
+                "Bridge 脚本 ID", "Bridge Run ID", "此脚本的执行记录",
                 "Demo → Bridge → DolphinScheduler 调用证据",
-                "上传输入文件", "run-file", "file-upload", "run-retry");
+                "上传输入文件", "run-file", "file-upload", "run-retry", "runnable-basis");
+        assertThat(html).doesNotContain("类型 1 ·", "类型 2 ·", "类型 3 ·", "<th>短 ID</th>", "<h2>执行历史</h2>");
+        assertThat(styles).contains(".script-tree", ".tree-folder", ".script-inline-detail",
+                ".run-inline-detail", ".runnable-basis", ".panel-parking");
         assertThat(script).contains(
                 "api(\"/scans/options\")",
                 "api(\"/scans/latest\")",
@@ -42,9 +47,20 @@ class BridgeConsoleAssetsTest {
                 "byId(\"run-refresh\")");
         assertThat(script).contains(
                 "function automaticParameters(entry)",
-                "类型 1 固定无参数",
+                "原生 Python 固定无参数",
+                "new URLSearchParams({ all: \"true\", page_size: \"200\" })",
                 "query.set(\"support_level\", supportLevel)",
                 "query.set(\"runnable\", runnable)",
+                "buildScriptTree(scripts)",
+                "renderScriptTree(buildScriptTree(scripts)",
+                "sourceRow.after(host)",
+                "sourceRow.after(row)",
+                "Bridge 脚本 ID：",
+                "Bridge Run ID：",
+                "DolphinScheduler Task Instance ID",
+                "Python 语法或编译成功只是前置门槛，不等于可执行",
+                "role=task", "adapter", "BOUND",
+                "扫描文件", "已入库", "需处理",
                 "spec.allowed_values[0]",
                 "Demo -> notebook-dolphin-bridge -> DolphinScheduler -> original script",
                 "public_path: \"/data-platform/notebook-dolphin-bridge/api/v1/runs\"",
@@ -54,9 +70,9 @@ class BridgeConsoleAssetsTest {
                 "workflowDefinitionCode",
                 "dolphinSchedulerStartParams(run)",
                 "startParams: {}",
-                "类型 1：DolphinScheduler startParams 为空",
+                "原生 Python：DolphinScheduler startParams 为空",
                 "Object.assign({ run_id: run.run_id }, parameters, { run_id: run.run_id })",
-                "类型 2/3：DolphinScheduler startParams 包含 run_id 和直接业务参数",
+                "自动参数/完整 ETL 契约：DolphinScheduler startParams 包含 run_id 和直接业务参数",
                 "workflow_instance_id",
                 "task_instance_id",
                 "bridge_accept_response",
@@ -66,7 +82,7 @@ class BridgeConsoleAssetsTest {
         assertThat(script).doesNotContain(
                 "/tasks", "task_key", "tsk_", "/uploads", "/timeline", "/diagnosis", "/lineage", "file_ids: []",
                 "Authorization", "service_token", "BRIDGE_SERVICE_TOKEN", "DolphinSchedulerClient",
-                "http://60.", "https://60.");
+                "http://60.", "https://60.", "类型 1", "类型 2/3");
         assertThat(application).contains(
                 "max-file-size: ${BRIDGE_UPLOAD_MAX_SIZE:100MB}",
                 "max-request-size: ${BRIDGE_UPLOAD_MAX_SIZE:100MB}");
